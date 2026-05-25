@@ -18,6 +18,8 @@ dir: Attachments/Vacation
         grid: { rows: 1, columns: 1 },
         height: 360,
         navigation: "plane",
+        fit: "cover",
+        caption: false,
       },
     });
   });
@@ -30,6 +32,8 @@ list:
   - Attachments/a.png
 sort: modified
 height: 420
+fit: contain
+caption: true
 `);
 
     expect(result.ok).toBe(true);
@@ -37,6 +41,26 @@ height: 420
       expect(result.config.list).toEqual(["Attachments/b.png", "Attachments/a.png"]);
       expect(result.config.sort).toBe("modified");
       expect(result.config.height).toBe(420);
+      expect(result.config.fit).toBe("contain");
+      expect(result.config.caption).toBe(true);
+    }
+  });
+
+  it("normalizes scalar option values", () => {
+    const result = parseGalleryBlock(`
+gallery_id: normalized
+list:
+  - Attachments/a.png
+sort: "Modified"
+fit: сontain.
+caption: TRUE
+`);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.config.sort).toBe("modified");
+      expect(result.config.fit).toBe("contain");
+      expect(result.config.caption).toBe(true);
     }
   });
 
@@ -44,6 +68,8 @@ height: 420
     const result = parseGalleryBlock(`
 sort: random
 height: -10
+fit: stretch
+caption: maybe
 `);
 
     expect(result.ok).toBe(false);
@@ -52,6 +78,8 @@ height: -10
       expect(result.errors).toContain("Provide at least one media source: `dir` or `list`.");
       expect(result.errors).toContain("`sort` must be one of: `name`, `created`, `modified`.");
       expect(result.errors).toContain("`height` must be a positive number.");
+      expect(result.errors).toContain("`fit` must be one of: `cover`, `contain`.");
+      expect(result.errors).toContain("`caption` must be one of: `true`, `false`.");
     }
   });
 

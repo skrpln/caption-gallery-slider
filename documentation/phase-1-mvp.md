@@ -12,10 +12,12 @@ Phase 1 implements the first usable `gallery` code block:
 - merge `dir` and `list` into one deduplicated set;
 - sort the full set by `name`, `created`, or `modified`;
 - render a single-image viewport for `grid: 1,1`;
-- navigate with previous/next buttons, dots, and basic swipe gestures;
+- navigate with previous/next buttons, dots, basic swipe gestures, and wheel/trackpad input after the viewport is focused;
+- switch image sizing with `fit: cover | contain`;
+- expose a native fullscreen button for the current gallery widget;
 - render inline error states instead of throwing.
 
-Captions, preview thumbnails, video controls, grid mode, and fullscreen are intentionally outside Phase 1.
+Caption rendering/editing, preview thumbnails, video controls, and grid mode are intentionally outside Phase 1.
 
 ## Modules
 
@@ -38,9 +40,23 @@ Phase 1 accepts:
 - `sort: name | created | modified`;
 - `height` as a positive number;
 - `grid: 1,1`;
-- `navigation: plane`.
+- `navigation: plane`;
+- `fit: cover | contain`;
+- `caption: true | false`.
 
 Future options are parsed but rejected with inline messages when they are not part of Phase 1.
+
+`fit: cover` is the default and crops media to fill the viewport. `fit: contain` keeps the whole image visible inside the viewport and may leave empty space near the edges. Scalar option values are normalized for case, quote characters, trailing punctuation, and common Cyrillic/Latin lookalikes. `caption` defaults to `false`; `caption: true` is accepted as a forward-compatible config flag, but caption UI is implemented in Phase 2.
+
+## Interaction
+
+The viewport receives focus after a click inside the gallery image area. While focused:
+
+- horizontal trackpad scroll or mouse wheel moves to the next/previous image;
+
+Keyboard arrow navigation was tested in this session but deferred to Phase 6 accessibility work because it did not behave reliably in Obsidian Reading/Live Preview contexts. Details and tested approaches are documented in [[documentation/keyboard-navigation-backlog]].
+
+Previous/next controls live in a full-width strip under the viewport, split into two half-width buttons. Each button uses three chevron icons and the same translucent theme-aware styling without covering the image. The fullscreen control is a small macOS-style circular button aligned with the navigation row.
 
 ## Sorting and Deduplication
 
@@ -73,4 +89,3 @@ Last verified commands:
 npm test
 npm run build
 ```
-
