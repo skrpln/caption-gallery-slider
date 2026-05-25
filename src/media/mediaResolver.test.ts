@@ -85,6 +85,8 @@ function config(overrides: Partial<GalleryConfig>): GalleryConfig {
     grid: { rows: 1, columns: 1 },
     height: 360,
     navigation: "plane",
+    fit: "cover",
+    caption: false,
     ...overrides,
   };
 }

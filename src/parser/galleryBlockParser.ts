@@ -2,6 +2,7 @@
 
 export type GallerySort = "name" | "created" | "modified";
 export type GalleryNavigation = "plane" | "preview";
+export type GalleryFit = "cover" | "contain";
 
 export interface GalleryGrid {
   rows: number;
@@ -16,6 +17,8 @@ export interface GalleryConfig {
   grid: GalleryGrid;
   height: number;
   navigation: GalleryNavigation;
+  fit: GalleryFit;
+  caption: boolean;
 }
 
 export interface GalleryParseSuccess {
@@ -34,8 +37,11 @@ const DEFAULT_SORT: GallerySort = "name";
 const DEFAULT_GRID: GalleryGrid = { rows: 1, columns: 1 };
 const DEFAULT_HEIGHT = 360;
 const DEFAULT_NAVIGATION: GalleryNavigation = "plane";
+const DEFAULT_FIT: GalleryFit = "cover";
+const DEFAULT_CAPTION = false;
 const SORT_VALUES = new Set<GallerySort>(["name", "created", "modified"]);
 const NAVIGATION_VALUES = new Set<GalleryNavigation>(["plane", "preview"]);
+const FIT_VALUES = new Set<GalleryFit>(["cover", "contain"]);
 
 interface RawGalleryConfig {
   gallery_id?: string;
@@ -45,6 +51,8 @@ interface RawGalleryConfig {
   grid?: string;
   height?: string;
   navigation?: string;
+  fit?: string;
+  caption?: string;
 }
 
 export function parseGalleryBlock(source: string): GalleryParseResult {
@@ -103,6 +111,8 @@ function validateRawGalleryConfig(raw: RawGalleryConfig): GalleryParseResult {
   const grid = parseGrid(raw.grid, errors);
   const height = parseHeight(raw.height, errors);
   const navigation = parseNavigation(raw.navigation, errors);
+  const fit = parseFit(raw.fit, errors);
+  const caption = parseBoolean(raw.caption, "caption", errors, DEFAULT_CAPTION);
 
   if (!galleryId) {
     errors.push("`gallery_id` is required.");
@@ -134,17 +144,20 @@ function validateRawGalleryConfig(raw: RawGalleryConfig): GalleryParseResult {
       grid,
       height,
       navigation,
+      fit,
+      caption,
     },
   };
 }
 
 function parseSort(value: string | undefined, errors: string[]): GallerySort {
-  if (!value) {
+  const normalized = normalizeScalarValue(value);
+  if (!normalized) {
     return DEFAULT_SORT;
   }
 
-  if (SORT_VALUES.has(value as GallerySort)) {
-    return value as GallerySort;
+  if (SORT_VALUES.has(normalized as GallerySort)) {
+    return normalized as GallerySort;
   }
 
   errors.push("`sort` must be one of: `name`, `created`, `modified`.");
@@ -188,16 +201,81 @@ function parseHeight(value: string | undefined, errors: string[]): number {
 }
 
 function parseNavigation(value: string | undefined, errors: string[]): GalleryNavigation {
-  if (!value) {
+  const normalized = normalizeScalarValue(value);
+  if (!normalized) {
     return DEFAULT_NAVIGATION;
   }
 
-  if (NAVIGATION_VALUES.has(value as GalleryNavigation)) {
-    return value as GalleryNavigation;
+  if (NAVIGATION_VALUES.has(normalized as GalleryNavigation)) {
+    return normalized as GalleryNavigation;
   }
 
   errors.push("`navigation` must be one of: `plane`, `preview`.");
   return DEFAULT_NAVIGATION;
+}
+
+function parseFit(value: string | undefined, errors: string[]): GalleryFit {
+  const normalized = normalizeScalarValue(value);
+  if (!normalized) {
+    return DEFAULT_FIT;
+  }
+
+  if (FIT_VALUES.has(normalized as GalleryFit)) {
+    return normalized as GalleryFit;
+  }
+
+  errors.push("`fit` must be one of: `cover`, `contain`.");
+  return DEFAULT_FIT;
+}
+
+function parseBoolean(value: string | undefined, key: string, errors: string[], fallback: boolean): boolean {
+  const normalized = normalizeScalarValue(value);
+  if (!normalized) {
+    return fallback;
+  }
+
+  if (normalized === "true") {
+    return true;
+  }
+
+  if (normalized === "false") {
+    return false;
+  }
+
+  errors.push(`\`${key}\` must be one of: \`true\`, \`false\`.`);
+  return fallback;
+}
+
+function normalizeScalarValue(value: string | undefined): string {
+  return (value ?? "")
+    .trim()
+    .replace(/^["'`]+|["'`]+$/g, "")
+    .replace(/[.,;]+$/g, "")
+    .replace(/[АВЕКМНОРСТХаеорсух]/g, (char) => {
+      const lookalikes: Record<string, string> = {
+        А: "A",
+        В: "B",
+        Е: "E",
+        К: "K",
+        М: "M",
+        Н: "H",
+        О: "O",
+        Р: "P",
+        С: "C",
+        Т: "T",
+        Х: "X",
+        а: "a",
+        е: "e",
+        о: "o",
+        р: "p",
+        с: "c",
+        у: "y",
+        х: "x",
+      };
+
+      return lookalikes[char] ?? char;
+    })
+    .toLowerCase();
 }
 
 function stripInlineComment(line: string): string {
@@ -216,5 +294,5 @@ function emptyToUndefined(value: string | undefined): string | undefined {
 }
 
 function isKnownScalarKey(key: string): key is keyof Omit<RawGalleryConfig, "list"> {
-  return ["gallery_id", "dir", "sort", "grid", "height", "navigation"].includes(key);
+  return ["gallery_id", "dir", "sort", "grid", "height", "navigation", "fit", "caption"].includes(key);
 }
