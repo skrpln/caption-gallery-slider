@@ -1,0 +1,19 @@
+# Local agent/session files
+AGENTS.md
+plan.md
+documentation_rules.md
+progress_log.md
+log/
+
+# Dependencies and local build cache
+node_modules/
+.npm/
+
+# OS/editor noise
+.DS_Store
+.idea/
+.vscode/
+
+# Obsidian vault metadata
+.obsidian/
+

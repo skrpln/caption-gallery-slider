@@ -1,0 +1,11 @@
+{
+  "id": "obsidian-gallery",
+  "name": "Obsidian Gallery",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "Render gallery code blocks as native Obsidian image and video galleries.",
+  "author": "Nikita",
+  "authorUrl": "",
+  "fundingUrl": "",
+  "isDesktopOnly": false
+}
