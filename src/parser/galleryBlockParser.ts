@@ -1,8 +1,8 @@
 // Documentation: [[documentation/architecture]]
 
 export type GallerySort = "name" | "created" | "modified";
-export type GalleryNavigation = "plane" | "preview";
-export type GalleryFit = "cover" | "contain";
+export type GalleryNavigation = "plain" | "preview";
+export type GalleryView = "crop" | "fit";
 
 export interface GalleryGrid {
   rows: number;
@@ -15,9 +15,10 @@ export interface GalleryConfig {
   list: string[];
   sort: GallerySort;
   grid: GalleryGrid;
-  height: number;
+  viewHeight: number;
+  captionHeight: number;
   navigation: GalleryNavigation;
-  fit: GalleryFit;
+  view: GalleryView;
   caption: boolean;
 }
 
@@ -35,13 +36,14 @@ export type GalleryParseResult = GalleryParseSuccess | GalleryParseFailure;
 
 const DEFAULT_SORT: GallerySort = "name";
 const DEFAULT_GRID: GalleryGrid = { rows: 1, columns: 1 };
-const DEFAULT_HEIGHT = 360;
-const DEFAULT_NAVIGATION: GalleryNavigation = "plane";
-const DEFAULT_FIT: GalleryFit = "cover";
-const DEFAULT_CAPTION = false;
+const DEFAULT_VIEW_HEIGHT = 400;
+const DEFAULT_CAPTION_HEIGHT = 60;
+const DEFAULT_NAVIGATION: GalleryNavigation = "plain";
+const DEFAULT_VIEW: GalleryView = "crop";
+const DEFAULT_CAPTION = true;
 const SORT_VALUES = new Set<GallerySort>(["name", "created", "modified"]);
-const NAVIGATION_VALUES = new Set<GalleryNavigation>(["plane", "preview"]);
-const FIT_VALUES = new Set<GalleryFit>(["cover", "contain"]);
+const NAVIGATION_VALUES = new Set<GalleryNavigation>(["plain", "preview"]);
+const VIEW_VALUES = new Set<GalleryView>(["crop", "fit"]);
 
 interface RawGalleryConfig {
   gallery_id?: string;
@@ -50,7 +52,10 @@ interface RawGalleryConfig {
   sort?: string;
   grid?: string;
   height?: string;
+  view_height?: string;
+  caption_height?: string;
   navigation?: string;
+  view?: string;
   fit?: string;
   caption?: string;
 }
@@ -109,9 +114,10 @@ function validateRawGalleryConfig(raw: RawGalleryConfig): GalleryParseResult {
   const list = raw.list.map((item) => item.trim()).filter(Boolean);
   const sort = parseSort(raw.sort, errors);
   const grid = parseGrid(raw.grid, errors);
-  const height = parseHeight(raw.height, errors);
+  const viewHeight = parsePositiveNumber(raw.view_height ?? raw.height, "view_height", errors, DEFAULT_VIEW_HEIGHT);
+  const captionHeight = parsePositiveNumber(raw.caption_height, "caption_height", errors, DEFAULT_CAPTION_HEIGHT);
   const navigation = parseNavigation(raw.navigation, errors);
-  const fit = parseFit(raw.fit, errors);
+  const view = parseView(raw.view, raw.fit, errors);
   const caption = parseBoolean(raw.caption, "caption", errors, DEFAULT_CAPTION);
 
   if (!galleryId) {
@@ -126,8 +132,8 @@ function validateRawGalleryConfig(raw: RawGalleryConfig): GalleryParseResult {
     errors.push("Only `grid: 1,1` is supported in Phase 1.");
   }
 
-  if (navigation !== "plane") {
-    errors.push("Only `navigation: plane` is supported in Phase 1.");
+  if (navigation !== "plain") {
+    errors.push("Only `navigation: plain` is supported in Phase 1.");
   }
 
   if (errors.length > 0) {
@@ -142,9 +148,10 @@ function validateRawGalleryConfig(raw: RawGalleryConfig): GalleryParseResult {
       list,
       sort,
       grid,
-      height,
+      viewHeight,
+      captionHeight,
       navigation,
-      fit,
+      view,
       caption,
     },
   };
@@ -186,18 +193,18 @@ function parseGrid(value: string | undefined, errors: string[]): GalleryGrid {
   return { rows, columns };
 }
 
-function parseHeight(value: string | undefined, errors: string[]): number {
+function parsePositiveNumber(value: string | undefined, key: string, errors: string[], fallback: number): number {
   if (!value) {
-    return DEFAULT_HEIGHT;
+    return fallback;
   }
 
-  const height = Number.parseInt(value, 10);
-  if (!Number.isFinite(height) || height <= 0) {
-    errors.push("`height` must be a positive number.");
-    return DEFAULT_HEIGHT;
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    errors.push(`\`${key}\` must be a positive number.`);
+    return fallback;
   }
 
-  return height;
+  return parsed;
 }
 
 function parseNavigation(value: string | undefined, errors: string[]): GalleryNavigation {
@@ -206,26 +213,51 @@ function parseNavigation(value: string | undefined, errors: string[]): GalleryNa
     return DEFAULT_NAVIGATION;
   }
 
+  if (normalized === "plane") {
+    return "plain";
+  }
+
   if (NAVIGATION_VALUES.has(normalized as GalleryNavigation)) {
     return normalized as GalleryNavigation;
   }
 
-  errors.push("`navigation` must be one of: `plane`, `preview`.");
+  errors.push("`navigation` must be one of: `plain`, `preview`.");
   return DEFAULT_NAVIGATION;
 }
 
-function parseFit(value: string | undefined, errors: string[]): GalleryFit {
+function parseView(value: string | undefined, legacyFit: string | undefined, errors: string[]): GalleryView {
   const normalized = normalizeScalarValue(value);
   if (!normalized) {
-    return DEFAULT_FIT;
+    const legacy = normalizeScalarValue(legacyFit);
+    if (legacy === "cover") {
+      return "crop";
+    }
+
+    if (legacy === "contain") {
+      return "fit";
+    }
+
+    if (legacy) {
+      errors.push("`fit` has been renamed to `view`; use `view: crop` or `view: fit`.");
+    }
+
+    return DEFAULT_VIEW;
   }
 
-  if (FIT_VALUES.has(normalized as GalleryFit)) {
-    return normalized as GalleryFit;
+  if (VIEW_VALUES.has(normalized as GalleryView)) {
+    return normalized as GalleryView;
   }
 
-  errors.push("`fit` must be one of: `cover`, `contain`.");
-  return DEFAULT_FIT;
+  if (normalized === "cover") {
+    return "crop";
+  }
+
+  if (normalized === "contain") {
+    return "fit";
+  }
+
+  errors.push("`view` must be one of: `crop`, `fit`.");
+  return DEFAULT_VIEW;
 }
 
 function parseBoolean(value: string | undefined, key: string, errors: string[], fallback: boolean): boolean {
@@ -294,5 +326,17 @@ function emptyToUndefined(value: string | undefined): string | undefined {
 }
 
 function isKnownScalarKey(key: string): key is keyof Omit<RawGalleryConfig, "list"> {
-  return ["gallery_id", "dir", "sort", "grid", "height", "navigation", "fit", "caption"].includes(key);
+  return [
+    "gallery_id",
+    "dir",
+    "sort",
+    "grid",
+    "height",
+    "view_height",
+    "caption_height",
+    "navigation",
+    "view",
+    "fit",
+    "caption",
+  ].includes(key);
 }

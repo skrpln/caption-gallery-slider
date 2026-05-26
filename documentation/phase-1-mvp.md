@@ -13,7 +13,8 @@ Phase 1 implements the first usable `gallery` code block:
 - sort the full set by `name`, `created`, or `modified`;
 - render a single-image viewport for `grid: 1,1`;
 - navigate with previous/next buttons, dots, basic swipe gestures, and wheel/trackpad input after the viewport is focused;
-- switch image sizing with `fit: cover | contain`;
+- set media viewport height with `view_height`;
+- switch image sizing with `view: crop | fit`;
 - expose a native fullscreen button for the current gallery widget;
 - render inline error states instead of throwing.
 
@@ -21,15 +22,15 @@ Caption rendering/editing, preview thumbnails, video controls, and grid mode are
 
 ## Modules
 
-| Module | Responsibility |
-| --- | --- |
-| `src/parser/galleryBlockParser.ts` | Parses raw code block text into `GalleryConfig` and friendly validation errors. |
-| `src/media/mediaTypes.ts` | Defines gallery media item types and Phase 1 supported media extensions. |
-| `src/media/mediaResolver.ts` | Resolves vault-like entries into sorted `GalleryItem[]` without depending on Obsidian classes. |
+| Module                              | Responsibility                                                                                            |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `src/parser/galleryBlockParser.ts`  | Parses raw code block text into `GalleryConfig` and friendly validation errors.                           |
+| `src/media/mediaTypes.ts`           | Defines gallery media item types and Phase 1 supported media extensions.                                  |
+| `src/media/mediaResolver.ts`        | Resolves vault-like entries into sorted `GalleryItem[]` without depending on Obsidian classes.            |
 | `src/media/obsidianVaultAdapter.ts` | Converts Obsidian `Vault`, `TFile`, and `TFolder` objects into the resolver's testable `VaultLike` shape. |
-| `src/state/galleryState.ts` | Owns index transitions for next, previous, and direct navigation. |
-| `src/render/GalleryRenderer.ts` | Creates the DOM widget and updates only media source and active navigation state. |
-| `src/main.ts` | Registers the `gallery` code block processor and connects parser, resolver, and renderer. |
+| `src/state/galleryState.ts`         | Owns index transitions for next, previous, and direct navigation.                                         |
+| `src/render/GalleryRenderer.ts`     | Creates the DOM widget and updates only media source and active navigation state.                         |
+| `src/main.ts`                       | Registers the `gallery` code block processor and connects parser, resolver, and renderer.                 |
 
 ## Validation Rules
 
@@ -38,15 +39,18 @@ Phase 1 accepts:
 - required `gallery_id`;
 - at least one of `dir` or `list`;
 - `sort: name | created | modified`;
-- `height` as a positive number;
+- `view_height` as a positive number;
+- `caption_height` as a positive number;
 - `grid: 1,1`;
-- `navigation: plane`;
-- `fit: cover | contain`;
+- `navigation: plain`;
+- `view: crop | fit`;
 - `caption: true | false`.
 
 Future options are parsed but rejected with inline messages when they are not part of Phase 1.
 
-`fit: cover` is the default and crops media to fill the viewport. `fit: contain` keeps the whole image visible inside the viewport and may leave empty space near the edges. Scalar option values are normalized for case, quote characters, trailing punctuation, and common Cyrillic/Latin lookalikes. `caption` defaults to `false`; `caption: true` is accepted as a forward-compatible config flag, but caption UI is implemented in Phase 2.
+`view_height` defaults to `400`. `caption_height` defaults to `60`. The legacy `height` option is temporarily mapped to `view_height`.
+
+`view: crop` is the default and crops media to fill the viewport. `view: fit` keeps the whole image visible inside the viewport and may leave empty space near the edges. Scalar option values are normalized for case, quote characters, trailing punctuation, and common Cyrillic/Latin lookalikes. `caption` now defaults to `true`; `caption: false` keeps the compact gallery without a caption panel.
 
 ## Interaction
 

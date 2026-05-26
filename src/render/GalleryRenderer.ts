@@ -4,32 +4,61 @@ import { MarkdownRenderChild, setIcon } from "obsidian";
 import type { GalleryConfig } from "../parser/galleryBlockParser";
 import type { GalleryItem } from "../media/mediaTypes";
 import { createGalleryState, goToIndex, nextIndex, previousIndex, type GalleryState } from "../state/galleryState";
+import type { CaptionState } from "../captions/obsidianCaptionService";
 
 export interface GalleryRendererOptions {
   config: GalleryConfig;
   items: GalleryItem[];
   getResourcePath(path: string): string | null;
+  getCaption?(item: GalleryItem): Promise<CaptionState>;
+  saveCaption?(item: GalleryItem, body: string): Promise<CaptionState>;
+  rotateCaption?(item: GalleryItem, rotation: number): Promise<CaptionState>;
+  openCaption?(item: GalleryItem): Promise<void>;
+  renderCaptionMarkdown?(
+    markdown: string,
+    containerEl: HTMLElement,
+    sourcePath: string,
+    component: MarkdownRenderChild,
+  ): Promise<void>;
 }
 
 export class GalleryRenderer extends MarkdownRenderChild {
   private readonly config: GalleryConfig;
   private readonly items: GalleryItem[];
   private readonly getResourcePath: (path: string) => string | null;
+  private readonly getCaption: ((item: GalleryItem) => Promise<CaptionState>) | null;
+  private readonly saveCaption: ((item: GalleryItem, body: string) => Promise<CaptionState>) | null;
+  private readonly rotateCaption: ((item: GalleryItem, rotation: number) => Promise<CaptionState>) | null;
+  private readonly openCaption: ((item: GalleryItem) => Promise<void>) | null;
+  private readonly renderCaptionMarkdown: GalleryRendererOptions["renderCaptionMarkdown"] | null;
   private state: GalleryState;
   private rootEl: HTMLElement | null = null;
   private viewportEl: HTMLElement | null = null;
+  private captionEl: HTMLElement | null = null;
+  private captionContentEl: HTMLElement | null = null;
+  private captionOpenButtonEl: HTMLButtonElement | null = null;
+  private captionState: CaptionState | null = null;
   private fullscreenButtonEl: HTMLButtonElement | null = null;
+  private rotateButtonEl: HTMLButtonElement | null = null;
   private mediaEl: HTMLImageElement | null = null;
   private dotEls: HTMLButtonElement[] = [];
   private pointerStartX: number | null = null;
   private lastWheelNavigationAt = 0;
   private inputActive = false;
+  private captionEditing = false;
+  private captionRenderToken = 0;
+  private captionSaveToken = 0;
 
   constructor(containerEl: HTMLElement, options: GalleryRendererOptions) {
     super(containerEl);
     this.config = options.config;
     this.items = options.items;
     this.getResourcePath = options.getResourcePath;
+    this.getCaption = options.getCaption ?? null;
+    this.saveCaption = options.saveCaption ?? null;
+    this.rotateCaption = options.rotateCaption ?? null;
+    this.openCaption = options.openCaption ?? null;
+    this.renderCaptionMarkdown = options.renderCaptionMarkdown ?? null;
     this.state = createGalleryState(options.items.length);
   }
 
@@ -41,8 +70,9 @@ export class GalleryRenderer extends MarkdownRenderChild {
     this.containerEl.empty();
 
     const root = document.createElement("div");
-    root.className = `og-gallery og-gallery--fit-${this.config.fit}`;
-    root.style.height = `${this.config.height}px`;
+    root.className = `og-gallery og-gallery--view-${this.config.view}`;
+    root.style.setProperty("--og-view-height", `${this.config.viewHeight}px`);
+    root.style.setProperty("--og-caption-height", `${this.config.captionHeight}px`);
     this.rootEl = root;
     this.containerEl.appendChild(root);
 
@@ -51,12 +81,15 @@ export class GalleryRenderer extends MarkdownRenderChild {
       return;
     }
 
-    const fullscreenButton = this.createFullscreenButton();
     const navEl = this.createNavigation();
     const viewportEl = this.createViewport();
     const controlsEl = this.createControls();
+    const captionEl = this.config.caption ? this.createCaption() : null;
 
-    root.append(fullscreenButton, navEl, viewportEl, controlsEl);
+    root.append(navEl, viewportEl, controlsEl);
+    if (captionEl) {
+      root.appendChild(captionEl);
+    }
     this.updateView();
   }
 
@@ -64,25 +97,39 @@ export class GalleryRenderer extends MarkdownRenderChild {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "og-gallery__fullscreen";
-    button.setAttribute("aria-label", "Open gallery fullscreen");
+    setButtonLabel(button, "fullscreen");
+    button.textContent = "⛶";
     this.fullscreenButtonEl = button;
-    this.updateFullscreenButtonIcon();
     this.registerDomEvent(button, "click", () => this.toggleFullscreen());
-    this.registerDomEvent(document, "fullscreenchange", () => this.updateFullscreenButtonIcon());
+    return button;
+  }
+
+  private createRotateButton(): HTMLButtonElement {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "og-gallery__rotate";
+    setButtonLabel(button, "rotate");
+    button.textContent = "↻";
+    this.rotateButtonEl = button;
+    this.registerDomEvent(button, "click", (event: MouseEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      void this.rotateCurrentMedia();
+    });
     return button;
   }
 
   private createNavigation(): HTMLElement {
     const navEl = document.createElement("div");
     navEl.className = "og-gallery__nav";
-    navEl.setAttribute("aria-label", "Gallery navigation");
+    navEl.setAttribute("aria-label", "gallery navigation");
     this.dotEls = [];
 
     this.items.forEach((item, index) => {
       const dotEl = document.createElement("button");
       dotEl.type = "button";
       dotEl.className = "og-gallery__dot";
-      dotEl.setAttribute("aria-label", `Show ${item.name}`);
+      setButtonLabel(dotEl, `item ${index + 1}`);
       this.registerDomEvent(dotEl, "click", () => this.goTo(index));
       navEl.appendChild(dotEl);
       this.dotEls.push(dotEl);
@@ -95,13 +142,15 @@ export class GalleryRenderer extends MarkdownRenderChild {
     const viewportEl = document.createElement("div");
     viewportEl.className = "og-gallery__viewport";
     viewportEl.tabIndex = 0;
-    viewportEl.setAttribute("aria-label", "Gallery viewport");
+    viewportEl.setAttribute("aria-label", "gallery viewport");
     this.viewportEl = viewportEl;
 
     this.mediaEl = document.createElement("img");
     this.mediaEl.className = "og-gallery__media";
     this.mediaEl.loading = "lazy";
     this.mediaEl.decoding = "async";
+    const fullscreenButton = this.createFullscreenButton();
+    const rotateButton = this.createRotateButton();
 
     this.registerDomEvent(viewportEl, "pointerdown", (event: PointerEvent) => {
       this.setInputActive(true);
@@ -111,11 +160,11 @@ export class GalleryRenderer extends MarkdownRenderChild {
     this.registerDomEvent(viewportEl, "click", () => this.setInputActive(true));
 
     this.registerDomEvent(document, "pointerdown", (event: PointerEvent) => {
-      if (!this.rootEl || !(event.target instanceof Node)) {
+      if (!this.viewportEl || !(event.target instanceof Node)) {
         return;
       }
 
-      this.setInputActive(this.rootEl.contains(event.target));
+      this.setInputActive(this.viewportEl.contains(event.target));
     });
 
     this.registerDomEvent(viewportEl, "wheel", (event: WheelEvent) => {
@@ -162,7 +211,7 @@ export class GalleryRenderer extends MarkdownRenderChild {
       }
     });
 
-    viewportEl.append(this.mediaEl);
+    viewportEl.append(this.mediaEl, fullscreenButton, rotateButton);
     return viewportEl;
   }
 
@@ -170,13 +219,58 @@ export class GalleryRenderer extends MarkdownRenderChild {
     const controlsEl = document.createElement("div");
     controlsEl.className = "og-gallery__controls";
 
-    const previousButton = createArrowButton("Previous image", "left");
-    const nextButton = createArrowButton("Next image", "right");
+    const previousButton = createArrowButton("previous", "left");
+    const nextButton = createArrowButton("next", "right");
     this.registerDomEvent(previousButton, "click", () => this.previous());
     this.registerDomEvent(nextButton, "click", () => this.next());
 
     controlsEl.append(previousButton, nextButton);
     return controlsEl;
+  }
+
+  private createCaption(): HTMLElement {
+    const captionEl = document.createElement("div");
+    captionEl.className = "og-gallery__caption";
+    captionEl.setAttribute("aria-label", "gallery caption");
+    this.captionEl = captionEl;
+
+    const contentEl = document.createElement("div");
+    contentEl.className = "og-gallery__caption-content";
+    contentEl.tabIndex = 0;
+    this.captionContentEl = contentEl;
+
+    const openButtonEl = document.createElement("button");
+    openButtonEl.type = "button";
+    openButtonEl.className = "og-gallery__caption-open";
+    setButtonLabel(openButtonEl, "caption");
+    setIcon(openButtonEl, "file-text");
+    this.captionOpenButtonEl = openButtonEl;
+
+    this.registerDomEvent(contentEl, "click", (event: MouseEvent) => {
+      const target = event.target;
+      if (target instanceof HTMLElement && target.closest("a.internal-link")) {
+        return;
+      }
+
+      this.startCaptionEditing();
+    });
+
+    this.registerDomEvent(contentEl, "input", () => {
+      void this.saveCaptionEdit();
+    });
+
+    this.registerDomEvent(contentEl, "blur", () => {
+      void this.finishCaptionEditing();
+    });
+
+    this.registerDomEvent(openButtonEl, "click", (event: MouseEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      void this.openCurrentCaption();
+    });
+
+    captionEl.append(contentEl, openButtonEl);
+    return captionEl;
   }
 
   private setInputActive(active: boolean): void {
@@ -201,30 +295,14 @@ export class GalleryRenderer extends MarkdownRenderChild {
     try {
       if (document.fullscreenElement === this.rootEl) {
         await document.exitFullscreen();
-        this.updateFullscreenButtonIcon();
         return;
       }
 
       await this.rootEl.requestFullscreen();
       this.setInputActive(true);
-      this.updateFullscreenButtonIcon();
     } catch {
       // Fullscreen can be blocked by the host app or OS permissions.
     }
-  }
-
-  private updateFullscreenButtonIcon(): void {
-    if (!this.fullscreenButtonEl) {
-      return;
-    }
-
-    this.fullscreenButtonEl.empty();
-    const isFullscreen = document.fullscreenElement === this.rootEl;
-    this.fullscreenButtonEl.setAttribute(
-      "aria-label",
-      isFullscreen ? "Exit gallery fullscreen" : "Open gallery fullscreen",
-    );
-    setIcon(this.fullscreenButtonEl, isFullscreen ? "minimize-2" : "maximize-2");
   }
 
   private next(): void {
@@ -258,11 +336,181 @@ export class GalleryRenderer extends MarkdownRenderChild {
 
     this.mediaEl.src = resourcePath;
     this.mediaEl.alt = item.name;
+    this.applyRotation(0);
 
     this.dotEls.forEach((dotEl, index) => {
       dotEl.classList.toggle("is-active", index === this.state.currentIndex);
       dotEl.setAttribute("aria-current", index === this.state.currentIndex ? "true" : "false");
     });
+
+    void this.updateCaption(item);
+  }
+
+  private async updateCaption(item: GalleryItem): Promise<void> {
+    if (!this.captionEl || !this.captionContentEl) {
+      return;
+    }
+
+    const token = (this.captionRenderToken += 1);
+    this.captionEditing = false;
+    this.captionState = null;
+    this.captionContentEl.contentEditable = "false";
+    this.captionContentEl.removeAttribute("data-placeholder");
+    this.captionContentEl.empty();
+    this.captionContentEl.textContent = "Loading caption...";
+    this.captionEl.classList.remove("is-disabled", "is-editing", "is-empty");
+    this.captionOpenButtonEl?.classList.add("is-hidden");
+
+    const caption = await this.getCaption?.(item);
+    if (token !== this.captionRenderToken || !this.captionEl || !this.captionContentEl) {
+      return;
+    }
+
+    this.captionState = caption ?? {
+      status: "unconfigured",
+      path: null,
+      body: "",
+      exists: false,
+      rotation: 0,
+    };
+
+    if (!caption || caption.status === "unconfigured") {
+      delete this.captionEl.dataset.captionPath;
+      this.captionEl.classList.add("is-disabled", "is-empty");
+      this.captionContentEl.empty();
+      appendEmphasisLine(this.captionContentEl, "choose directory for gallery captions storage");
+      appendEmphasisLine(this.captionContentEl, "Settings > Community plugins > Obsidian Gallery > Caption folder");
+      this.applyRotation(0);
+      return;
+    }
+
+    this.applyRotation(caption.rotation);
+    this.captionEl.dataset.captionPath = caption.path;
+    this.captionOpenButtonEl?.classList.remove("is-hidden");
+
+    if (!caption.body) {
+      this.captionEl.classList.add("is-empty");
+      this.captionContentEl.empty();
+      const placeholderEl = document.createElement("em");
+      placeholderEl.textContent = "insert caption";
+      this.captionContentEl.appendChild(placeholderEl);
+      return;
+    }
+
+    this.captionEl.classList.remove("is-empty");
+    this.captionContentEl.empty();
+
+    if (this.renderCaptionMarkdown) {
+      await this.renderCaptionMarkdown(caption.body, this.captionContentEl, caption.path, this);
+      return;
+    }
+
+    this.captionContentEl.textContent = caption.body;
+  }
+
+  private startCaptionEditing(): void {
+    const item = this.items[this.state.currentIndex];
+    if (!this.captionEl || !this.captionContentEl || !item || this.captionEditing) {
+      return;
+    }
+
+    if (!this.captionState || this.captionState.status === "unconfigured") {
+      return;
+    }
+
+    this.captionEditing = true;
+    this.captionEl.classList.add("is-editing");
+    this.captionEl.classList.remove("is-empty");
+    this.captionContentEl.contentEditable = "true";
+    this.captionContentEl.empty();
+    this.captionContentEl.textContent = this.captionState.body;
+    this.captionContentEl.focus({ preventScroll: true });
+    placeCaretAtEnd(this.captionContentEl);
+  }
+
+  private async saveCaptionEdit(): Promise<void> {
+    const item = this.items[this.state.currentIndex];
+    if (!this.captionEditing || !this.captionContentEl || !item || !this.saveCaption || !this.captionState) {
+      return;
+    }
+
+    if (this.captionState.status === "unconfigured") {
+      return;
+    }
+
+    const body = readEditableText(this.captionContentEl);
+    if (!this.captionState.exists && body.length === 0) {
+      return;
+    }
+
+    const token = (this.captionSaveToken += 1);
+    const nextState = await this.saveCaption(item, body);
+    if (token !== this.captionSaveToken) {
+      return;
+    }
+
+    this.captionState = nextState;
+    this.captionOpenButtonEl?.classList.remove("is-hidden");
+    if (this.captionEl && nextState.path) {
+      this.captionEl.dataset.captionPath = nextState.path;
+    }
+  }
+
+  private async finishCaptionEditing(): Promise<void> {
+    if (!this.captionEditing) {
+      return;
+    }
+
+    this.captionEditing = false;
+    this.captionEl?.classList.remove("is-editing");
+    if (this.captionContentEl) {
+      this.captionContentEl.contentEditable = "false";
+    }
+
+    const item = this.items[this.state.currentIndex];
+    if (item) {
+      await this.updateCaption(item);
+    }
+  }
+
+  private async openCurrentCaption(): Promise<void> {
+    const item = this.items[this.state.currentIndex];
+    if (!item || !this.openCaption) {
+      return;
+    }
+
+    await this.openCaption(item);
+  }
+
+  private async rotateCurrentMedia(): Promise<void> {
+    const item = this.items[this.state.currentIndex];
+    if (!item || !this.rotateCaption) {
+      return;
+    }
+
+    const currentRotation = this.captionState?.rotation ?? 0;
+    const nextRotation = (currentRotation + 90) % 360;
+    this.applyRotation(nextRotation);
+    const nextState = await this.rotateCaption(item, nextRotation);
+    if (nextState.status === "unconfigured") {
+      this.applyRotation(0);
+      return;
+    }
+
+    this.captionState = nextState;
+    this.applyRotation(nextState.rotation);
+    this.captionOpenButtonEl?.classList.remove("is-hidden");
+    if (this.captionEl && nextState.path) {
+      this.captionEl.dataset.captionPath = nextState.path;
+    }
+  }
+
+  private applyRotation(rotation: number): void {
+    if (!this.mediaEl) {
+      return;
+    }
+
+    this.mediaEl.style.setProperty("--og-media-rotation", `${rotation}deg`);
   }
 }
 
@@ -270,7 +518,7 @@ function createArrowButton(label: string, direction: "left" | "right"): HTMLButt
   const button = document.createElement("button");
   button.type = "button";
   button.className = `og-gallery__arrow og-gallery__arrow--${direction === "left" ? "previous" : "next"}`;
-  button.setAttribute("aria-label", label);
+  setButtonLabel(button, label);
 
   for (let index = 0; index < 3; index += 1) {
     const iconEl = document.createElement("span");
@@ -282,9 +530,39 @@ function createArrowButton(label: string, direction: "left" | "right"): HTMLButt
   return button;
 }
 
+function setButtonLabel(button: HTMLButtonElement, label: string): void {
+  button.setAttribute("aria-label", label);
+  button.removeAttribute("title");
+}
+
 function createMessage(message: string): HTMLElement {
   const messageEl = document.createElement("div");
   messageEl.className = "og-gallery__message";
   messageEl.textContent = message;
   return messageEl;
+}
+
+function appendEmphasisLine(containerEl: HTMLElement, text: string): void {
+  const lineEl = document.createElement("div");
+  const emphasisEl = document.createElement("em");
+  emphasisEl.textContent = text;
+  lineEl.appendChild(emphasisEl);
+  containerEl.appendChild(lineEl);
+}
+
+function readEditableText(contentEl: HTMLElement): string {
+  return contentEl.innerText.replace(/\n$/, "");
+}
+
+function placeCaretAtEnd(contentEl: HTMLElement): void {
+  const selection = window.getSelection();
+  if (!selection) {
+    return;
+  }
+
+  const range = document.createRange();
+  range.selectNodeContents(contentEl);
+  range.collapse(false);
+  selection.removeAllRanges();
+  selection.addRange(range);
 }

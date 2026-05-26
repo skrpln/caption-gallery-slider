@@ -5,6 +5,9 @@ import { createObsidianVaultAdapter, getObsidianResourcePath } from "./media/obs
 import { resolveGalleryMedia } from "./media/mediaResolver";
 import { parseGalleryBlock } from "./parser/galleryBlockParser";
 import { GalleryRenderer } from "./render/GalleryRenderer";
+import { renderCaptionMarkdown } from "./captions/captionMarkdownRenderer";
+import { ObsidianCaptionService } from "./captions/obsidianCaptionService";
+import { ObsidianGallerySettingTab } from "./settings/ObsidianGallerySettingTab";
 import { DEFAULT_SETTINGS, type ObsidianGallerySettings } from "./settings/settings";
 
 const HOVER_SOURCE_ID = "obsidian-gallery-caption";
@@ -14,7 +17,9 @@ export default class ObsidianGalleryPlugin extends Plugin {
 
   async onload(): Promise<void> {
     await this.loadSettings();
+    this.addSettingTab(new ObsidianGallerySettingTab(this.app, this));
     this.registerCaptionHoverSource();
+    const captionService = new ObsidianCaptionService(this.app, () => this.settings.gallerySaveDir);
 
     this.registerMarkdownCodeBlockProcessor("gallery", (source, el, ctx) => {
       const parseResult = parseGalleryBlock(source);
@@ -35,6 +40,12 @@ export default class ObsidianGalleryPlugin extends Plugin {
         config: parseResult.config,
         items: mediaResult.items,
         getResourcePath: (path) => getObsidianResourcePath(this.app.vault, path),
+        getCaption: (item) => captionService.readCaption(parseResult.config, item),
+        saveCaption: (item, body) => captionService.saveCaption(parseResult.config, item, body),
+        rotateCaption: (item, rotation) => captionService.rotateCaption(parseResult.config, item, rotation),
+        openCaption: (item) => captionService.openCaption(parseResult.config, item),
+        renderCaptionMarkdown: (markdown, containerEl, sourcePath, component) =>
+          renderCaptionMarkdown(this.app, markdown, containerEl, sourcePath, component, HOVER_SOURCE_ID),
       });
 
       ctx.addChild(renderer);
