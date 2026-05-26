@@ -5,6 +5,7 @@ import type { GalleryConfig } from "../parser/galleryBlockParser";
 import type { GalleryItem } from "../media/mediaTypes";
 import { createGalleryState, goToIndex, nextIndex, previousIndex, type GalleryState } from "../state/galleryState";
 import type { CaptionState } from "../captions/obsidianCaptionService";
+import { choosePlainNavigationLayout, type PlainNavigationLayout } from "./navigationLayout";
 
 export interface GalleryRendererOptions {
   config: GalleryConfig;
@@ -41,7 +42,13 @@ export class GalleryRenderer extends MarkdownRenderChild {
   private fullscreenButtonEl: HTMLButtonElement | null = null;
   private rotateButtonEl: HTMLButtonElement | null = null;
   private mediaEl: HTMLImageElement | null = null;
+  private navEl: HTMLElement | null = null;
+  private navRailEl: HTMLElement | null = null;
+  private navThumbEl: HTMLElement | null = null;
   private dotEls: HTMLButtonElement[] = [];
+  private navigationLayout: PlainNavigationLayout = "dots";
+  private navigationResizeObserver: ResizeObserver | null = null;
+  private draggingNavigation = false;
   private pointerStartX: number | null = null;
   private lastWheelNavigationAt = 0;
   private inputActive = false;
@@ -86,7 +93,8 @@ export class GalleryRenderer extends MarkdownRenderChild {
     const controlsEl = this.createControls();
     const captionEl = this.config.caption ? this.createCaption() : null;
 
-    root.append(navEl, viewportEl, controlsEl);
+    viewportEl.appendChild(navEl);
+    root.append(viewportEl, controlsEl);
     if (captionEl) {
       root.appendChild(captionEl);
     }
@@ -123,6 +131,7 @@ export class GalleryRenderer extends MarkdownRenderChild {
     const navEl = document.createElement("div");
     navEl.className = "og-gallery__nav";
     navEl.setAttribute("aria-label", "gallery navigation");
+    this.navEl = navEl;
     this.dotEls = [];
 
     this.items.forEach((item, index) => {
@@ -135,6 +144,65 @@ export class GalleryRenderer extends MarkdownRenderChild {
       this.dotEls.push(dotEl);
     });
 
+    const railEl = document.createElement("div");
+    railEl.className = "og-gallery__nav-rail";
+    railEl.setAttribute("role", "slider");
+    railEl.setAttribute("aria-label", "gallery position");
+    railEl.setAttribute("aria-valuemin", "1");
+    railEl.setAttribute("aria-valuemax", String(this.items.length));
+    railEl.tabIndex = 0;
+
+    const thumbEl = document.createElement("div");
+    thumbEl.className = "og-gallery__nav-thumb";
+    railEl.appendChild(thumbEl);
+    navEl.appendChild(railEl);
+    this.navRailEl = railEl;
+    this.navThumbEl = thumbEl;
+
+    this.registerDomEvent(railEl, "pointerdown", (event: PointerEvent) => {
+      event.preventDefault();
+      this.draggingNavigation = true;
+      railEl.setPointerCapture(event.pointerId);
+      this.goToIndexFromNavigationPointer(event);
+    });
+
+    this.registerDomEvent(railEl, "pointermove", (event: PointerEvent) => {
+      if (!this.draggingNavigation) {
+        return;
+      }
+
+      event.preventDefault();
+      this.goToIndexFromNavigationPointer(event);
+    });
+
+    this.registerDomEvent(railEl, "pointerup", (event: PointerEvent) => {
+      this.draggingNavigation = false;
+      if (railEl.hasPointerCapture(event.pointerId)) {
+        railEl.releasePointerCapture(event.pointerId);
+      }
+    });
+
+    this.registerDomEvent(railEl, "pointercancel", (event: PointerEvent) => {
+      this.draggingNavigation = false;
+      if (railEl.hasPointerCapture(event.pointerId)) {
+        railEl.releasePointerCapture(event.pointerId);
+      }
+    });
+
+    this.registerDomEvent(railEl, "keydown", (event: KeyboardEvent) => {
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        this.previous();
+      }
+
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        this.next();
+      }
+    });
+
+    this.observeNavigationSize();
+    this.updateNavigationLayout();
     return navEl;
   }
 
@@ -320,6 +388,64 @@ export class GalleryRenderer extends MarkdownRenderChild {
     this.updateView();
   }
 
+  private observeNavigationSize(): void {
+    if (!this.navEl || !this.rootEl || typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    this.navigationResizeObserver?.disconnect();
+    this.navigationResizeObserver = new ResizeObserver(() => this.updateNavigationLayout());
+    this.navigationResizeObserver.observe(this.rootEl);
+    this.register(() => {
+      this.navigationResizeObserver?.disconnect();
+      this.navigationResizeObserver = null;
+    });
+  }
+
+  private updateNavigationLayout(): void {
+    if (!this.navEl) {
+      return;
+    }
+
+    const nextLayout = choosePlainNavigationLayout(this.items.length, this.getNavigationAvailableWidth());
+    this.navigationLayout = nextLayout;
+    this.navEl.classList.toggle("is-rail", nextLayout === "rail");
+    this.navEl.classList.toggle("is-dots", nextLayout === "dots");
+    this.updateNavigationPosition();
+  }
+
+  private getNavigationAvailableWidth(): number {
+    const rootWidth = this.rootEl?.clientWidth ?? 0;
+    if (rootWidth > 0) {
+      return Math.max(0, rootWidth - 96);
+    }
+
+    return this.navEl?.clientWidth ?? 0;
+  }
+
+  private updateNavigationPosition(): void {
+    if (!this.navRailEl || !this.navThumbEl) {
+      return;
+    }
+
+    const maxIndex = Math.max(0, this.items.length - 1);
+    const progress = maxIndex === 0 ? 0 : this.state.currentIndex / maxIndex;
+    this.navThumbEl.style.setProperty("--og-nav-progress", String(progress));
+    this.navRailEl.setAttribute("aria-valuenow", String(this.state.currentIndex + 1));
+  }
+
+  private goToIndexFromNavigationPointer(event: PointerEvent): void {
+    if (!this.navRailEl || this.items.length <= 1) {
+      return;
+    }
+
+    const rect = this.navRailEl.getBoundingClientRect();
+    const relativeX = Math.min(Math.max(event.clientX - rect.left, 0), rect.width);
+    const progress = rect.width === 0 ? 0 : relativeX / rect.width;
+    const index = Math.round(progress * (this.items.length - 1));
+    this.goTo(index);
+  }
+
   private updateView(): void {
     const item = this.items[this.state.currentIndex];
 
@@ -342,6 +468,7 @@ export class GalleryRenderer extends MarkdownRenderChild {
       dotEl.classList.toggle("is-active", index === this.state.currentIndex);
       dotEl.setAttribute("aria-current", index === this.state.currentIndex ? "true" : "false");
     });
+    this.updateNavigationPosition();
 
     void this.updateCaption(item);
   }
@@ -355,6 +482,7 @@ export class GalleryRenderer extends MarkdownRenderChild {
     this.captionEditing = false;
     this.captionState = null;
     this.captionContentEl.contentEditable = "false";
+    this.captionContentEl.classList.remove("markdown-rendered");
     this.captionContentEl.removeAttribute("data-placeholder");
     this.captionContentEl.empty();
     this.captionContentEl.textContent = "Loading caption...";
@@ -422,6 +550,7 @@ export class GalleryRenderer extends MarkdownRenderChild {
     this.captionEl.classList.add("is-editing");
     this.captionEl.classList.remove("is-empty");
     this.captionContentEl.contentEditable = "true";
+    this.captionContentEl.classList.remove("markdown-rendered");
     this.captionContentEl.empty();
     this.captionContentEl.textContent = this.captionState.body;
     this.captionContentEl.focus({ preventScroll: true });
