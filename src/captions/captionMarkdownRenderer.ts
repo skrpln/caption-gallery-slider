@@ -10,7 +10,9 @@ export async function renderCaptionMarkdown(
   component: Component,
   hoverSource: string,
 ): Promise<void> {
+  containerEl.classList.add("markdown-rendered");
   await MarkdownRenderer.render(app, markdown, containerEl, sourcePath, component);
+  compactCaptionMarkdown(containerEl);
 
   containerEl.querySelectorAll<HTMLElement>("a.internal-link").forEach((linkEl) => {
     component.registerDomEvent(linkEl, "click", (event: MouseEvent) => {
@@ -40,5 +42,40 @@ export async function renderCaptionMarkdown(
         sourcePath,
       });
     });
+  });
+}
+
+function compactCaptionMarkdown(containerEl: HTMLElement): void {
+  const compactBlockSelector = [
+    "p",
+    "ul",
+    "ol",
+    "blockquote",
+    "pre",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    ".el-p",
+    ".el-ul",
+    ".el-ol",
+    ".el-blockquote",
+    ".el-pre",
+    ".el-h1",
+    ".el-h2",
+    ".el-h3",
+    ".el-h4",
+    ".el-h5",
+    ".el-h6",
+    ".markdown-preview-section",
+    ".markdown-preview-section > div",
+  ].join(",");
+
+  containerEl.querySelectorAll<HTMLElement>(compactBlockSelector).forEach((blockEl) => {
+    blockEl.style.marginBlock = "0";
+    blockEl.style.lineHeight = "var(--og-caption-line-height)";
+    blockEl.style.minHeight = "0";
   });
 }

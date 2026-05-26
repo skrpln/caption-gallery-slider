@@ -73,7 +73,18 @@ Clicking a configured empty caption panel clears the placeholder and focuses a c
 
 A caption note button lives in the top-right corner of the caption panel. It is hidden by default and appears on caption hover/focus. It opens the corresponding caption note in the main Obsidian workspace; clicking it may create an empty caption note.
 
-Caption text uses a very compact line height and minimal top padding so the fixed caption area holds more Markdown content before scrolling.
+Caption text uses a compact `1.15` line height and minimal top padding so the fixed caption area holds more Markdown content before scrolling. The rendered Markdown view uses `white-space: normal`, while inline editing uses `white-space: pre-wrap`; this prevents renderer-created whitespace nodes from becoming visual blank lines in preview mode. The renderer explicitly marks the caption content as `.markdown-rendered`, and then compacts Obsidian Markdown block wrappers such as `.el-p` and `.markdown-preview-section > div` after `MarkdownRenderer.render()`. CSS keeps the same compact rules as a fallback. Headings keep their Obsidian/theme font-size hierarchy while using compact block spacing inside the constrained caption panel.
+
+## Plain Navigation Hardening
+
+`src/render/navigationLayout.ts` chooses the top navigation layout from item count and available width:
+
+- `dots` while the current item oval, the remaining item dots, and the minimum `3px` gaps fit inside the navigation width;
+- `rail` once that width is not enough or the gallery has more than `15` items.
+
+The active item marker is always a fixed horizontal muted oval. In `dots` layout the other media items remain small circular buttons. In `rail` layout all circles are hidden and the same oval moves along an invisible horizontal rail; pointer drag and click map the rail position to the closest media index.
+
+Plain navigation is rendered inside the media viewport and follows the same hover-only visibility model as viewport controls: it is hidden by default and appears on viewport hover or focus.
 
 ## Media Rotation
 
@@ -118,4 +129,5 @@ Current unit coverage added in this phase:
 - different `gallery_id` namespaces;
 - image/video target prefixes;
 - frontmatter/body splitting for caption notes;
-- caption note frontmatter creation.
+- caption note frontmatter creation;
+- adaptive plain navigation layout selection.
