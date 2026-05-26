@@ -83,10 +83,11 @@ function config(overrides: Partial<GalleryConfig>): GalleryConfig {
     list: [],
     sort: "name",
     grid: { rows: 1, columns: 1 },
-    height: 360,
-    navigation: "plane",
-    fit: "cover",
-    caption: false,
+    viewHeight: 400,
+    captionHeight: 60,
+    navigation: "plain",
+    view: "crop",
+    caption: true,
     ...overrides,
   };
 }

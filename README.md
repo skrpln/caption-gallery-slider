@@ -23,8 +23,10 @@ list:
   - Attachments/special.png
 sort: name
 grid: 1,1
-height: 400
-navigation: plane
+view_height: 400
+caption_height: 60
+navigation: plain
+view: crop
 ```
 ````
 
@@ -37,4 +39,3 @@ npm run build
 ```
 
 Built plugin files are `main.js`, `manifest.json`, and `styles.css`.
-
