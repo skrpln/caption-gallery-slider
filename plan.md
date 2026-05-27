@@ -10,16 +10,16 @@
 
 Основные слои:
 
-| Слой | Ответственность | Когда нужен |
-| --- | --- | --- |
-| Plugin entry | Регистрация code block processor, настроек, подписок на события vault | Phase 1 |
-| Parser | Преобразование текста `gallery` code block в типизированный config и validation result | Phase 1 |
-| Media resolver | Поиск файлов из `dir` и `list`, фильтрация форматов, сортировка, дедупликация | Phase 1 |
-| Gallery state | Индекс текущего элемента или страницы, переходы, wrap-around, swipe intent | Phase 1 |
-| Renderer | DOM-виджет, кнопки, viewport, dots/slider, caption panel | Phase 1-5 |
-| Caption service | Пути caption-файлов, lazy creation, frontmatter, markdown body | Phase 2 |
-| Markdown integration | `MarkdownRenderer.render()`, ручное подключение internal-link click/hover preview, hover source | Phase 2 |
-| Media controls | Видео-контролы и синхронизация состояния с caption frontmatter | Phase 4 |
+| Слой                 | Ответственность                                                                                 | Когда нужен |
+| -------------------- | ----------------------------------------------------------------------------------------------- | ----------- |
+| Plugin entry         | Регистрация code block processor, настроек, подписок на события vault                           | Phase 1     |
+| Parser               | Преобразование текста `gallery` code block в типизированный config и validation result          | Phase 1     |
+| Media resolver       | Поиск файлов из `dir` и `list`, фильтрация форматов, сортировка, дедупликация                   | Phase 1     |
+| Gallery state        | Индекс текущего элемента или страницы, переходы, wrap-around, swipe intent                      | Phase 1     |
+| Renderer             | DOM-виджет, кнопки, viewport, dots/slider, caption panel                                        | Phase 1-5   |
+| Caption service      | Пути caption-файлов, lazy creation, frontmatter, markdown body                                  | Phase 2     |
+| Markdown integration | `MarkdownRenderer.render()`, ручное подключение internal-link click/hover preview, hover source | Phase 2     |
+| Media controls       | Видео-контролы и синхронизация состояния с caption frontmatter                                  | Phase 4     |
 
 Ключевой принцип: бизнес-логика тестируется отдельно от Obsidian DOM. Парсер, сортировка, резолвинг списков, вычисление caption path и gallery state должны быть покрыты unit-тестами без запуска Obsidian.
 

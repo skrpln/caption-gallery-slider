@@ -5,7 +5,11 @@ import type { GalleryConfig } from "../parser/galleryBlockParser";
 import type { GalleryItem } from "../media/mediaTypes";
 import { createGalleryState, goToIndex, nextIndex, previousIndex, type GalleryState } from "../state/galleryState";
 import type { CaptionState } from "../captions/obsidianCaptionService";
-import { choosePlainNavigationLayout, type PlainNavigationLayout } from "./navigationLayout";
+import {
+  chooseTopNavigationLayout,
+  navigationPointerToIndex,
+  type TopNavigationLayout,
+} from "./navigationLayout";
 
 export interface GalleryRendererOptions {
   config: GalleryConfig;
@@ -46,11 +50,13 @@ export class GalleryRenderer extends MarkdownRenderChild {
   private navRailEl: HTMLElement | null = null;
   private navThumbEl: HTMLElement | null = null;
   private dotEls: HTMLButtonElement[] = [];
-  private navigationLayout: PlainNavigationLayout = "dots";
+  private previewButtonEls: HTMLButtonElement[] = [];
+  private navigationLayout: TopNavigationLayout = "dots";
   private navigationResizeObserver: ResizeObserver | null = null;
   private draggingNavigation = false;
   private pointerStartX: number | null = null;
   private lastWheelNavigationAt = 0;
+  private currentRotation = 0;
   private inputActive = false;
   private captionEditing = false;
   private captionRenderToken = 0;
@@ -105,7 +111,7 @@ export class GalleryRenderer extends MarkdownRenderChild {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "og-gallery__fullscreen";
-    setButtonLabel(button, "fullscreen");
+    this.setButtonLabel(button, "fullscreen");
     button.textContent = "⛶";
     this.fullscreenButtonEl = button;
     this.registerDomEvent(button, "click", () => this.toggleFullscreen());
@@ -116,7 +122,7 @@ export class GalleryRenderer extends MarkdownRenderChild {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "og-gallery__rotate";
-    setButtonLabel(button, "rotate");
+    this.setButtonLabel(button, "rotate");
     button.textContent = "↻";
     this.rotateButtonEl = button;
     this.registerDomEvent(button, "click", (event: MouseEvent) => {
@@ -133,12 +139,51 @@ export class GalleryRenderer extends MarkdownRenderChild {
     navEl.setAttribute("aria-label", "gallery navigation");
     this.navEl = navEl;
     this.dotEls = [];
+    this.previewButtonEls = [];
+
+    const previewEl = document.createElement("div");
+    previewEl.className = "og-gallery__preview";
+    this.registerDomEvent(previewEl, "wheel", (event: WheelEvent) => {
+      const primaryDelta = Math.abs(event.deltaX) >= Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+      if (Math.abs(primaryDelta) < 1) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      previewEl.scrollLeft += primaryDelta;
+    });
 
     this.items.forEach((item, index) => {
+      const previewButtonEl = document.createElement("button");
+      previewButtonEl.type = "button";
+      previewButtonEl.className = "og-gallery__preview-item";
+      this.setButtonLabel(previewButtonEl, `item ${index + 1}`);
+      this.registerDomEvent(previewButtonEl, "click", () => this.goTo(index));
+
+      const resourcePath = item.kind === "image" ? this.getResourcePath(item.path) : null;
+      if (resourcePath) {
+        const imageEl = document.createElement("img");
+        imageEl.src = resourcePath;
+        imageEl.alt = "";
+        imageEl.loading = "lazy";
+        imageEl.decoding = "async";
+        previewButtonEl.appendChild(imageEl);
+      } else {
+        const placeholderEl = document.createElement("span");
+        placeholderEl.textContent = item.kind === "video" ? "vid" : item.name.slice(0, 3);
+        previewButtonEl.appendChild(placeholderEl);
+      }
+
+      previewEl.appendChild(previewButtonEl);
+      this.previewButtonEls.push(previewButtonEl);
+    });
+
+    this.items.forEach((_item, index) => {
       const dotEl = document.createElement("button");
       dotEl.type = "button";
       dotEl.className = "og-gallery__dot";
-      setButtonLabel(dotEl, `item ${index + 1}`);
+      this.setButtonLabel(dotEl, `item ${index + 1}`);
       this.registerDomEvent(dotEl, "click", () => this.goTo(index));
       navEl.appendChild(dotEl);
       this.dotEls.push(dotEl);
@@ -203,6 +248,7 @@ export class GalleryRenderer extends MarkdownRenderChild {
 
     this.observeNavigationSize();
     this.updateNavigationLayout();
+    navEl.prepend(previewEl);
     return navEl;
   }
 
@@ -236,6 +282,10 @@ export class GalleryRenderer extends MarkdownRenderChild {
     });
 
     this.registerDomEvent(viewportEl, "wheel", (event: WheelEvent) => {
+      if (event.target instanceof HTMLElement && event.target.closest(".og-gallery__preview")) {
+        return;
+      }
+
       if (!this.inputActive) {
         return;
       }
@@ -289,6 +339,8 @@ export class GalleryRenderer extends MarkdownRenderChild {
 
     const previousButton = createArrowButton("previous", "left");
     const nextButton = createArrowButton("next", "right");
+    this.registerAutoHidingTooltip(previousButton, "previous");
+    this.registerAutoHidingTooltip(nextButton, "next");
     this.registerDomEvent(previousButton, "click", () => this.previous());
     this.registerDomEvent(nextButton, "click", () => this.next());
 
@@ -310,7 +362,7 @@ export class GalleryRenderer extends MarkdownRenderChild {
     const openButtonEl = document.createElement("button");
     openButtonEl.type = "button";
     openButtonEl.className = "og-gallery__caption-open";
-    setButtonLabel(openButtonEl, "caption");
+    this.setButtonLabel(openButtonEl, "caption");
     setIcon(openButtonEl, "file-text");
     this.captionOpenButtonEl = openButtonEl;
 
@@ -394,7 +446,10 @@ export class GalleryRenderer extends MarkdownRenderChild {
     }
 
     this.navigationResizeObserver?.disconnect();
-    this.navigationResizeObserver = new ResizeObserver(() => this.updateNavigationLayout());
+    this.navigationResizeObserver = new ResizeObserver(() => {
+      this.updateNavigationLayout();
+      this.applyRotation(this.currentRotation);
+    });
     this.navigationResizeObserver.observe(this.rootEl);
     this.register(() => {
       this.navigationResizeObserver?.disconnect();
@@ -407,10 +462,15 @@ export class GalleryRenderer extends MarkdownRenderChild {
       return;
     }
 
-    const nextLayout = choosePlainNavigationLayout(this.items.length, this.getNavigationAvailableWidth());
+    const nextLayout = chooseTopNavigationLayout(
+      this.config.navigation,
+      this.items.length,
+      this.getNavigationAvailableWidth(),
+    );
     this.navigationLayout = nextLayout;
     this.navEl.classList.toggle("is-rail", nextLayout === "rail");
     this.navEl.classList.toggle("is-dots", nextLayout === "dots");
+    this.navEl.classList.toggle("is-preview", nextLayout === "preview");
     this.updateNavigationPosition();
   }
 
@@ -440,10 +500,7 @@ export class GalleryRenderer extends MarkdownRenderChild {
     }
 
     const rect = this.navRailEl.getBoundingClientRect();
-    const relativeX = Math.min(Math.max(event.clientX - rect.left, 0), rect.width);
-    const progress = rect.width === 0 ? 0 : relativeX / rect.width;
-    const index = Math.round(progress * (this.items.length - 1));
-    this.goTo(index);
+    this.goTo(navigationPointerToIndex(this.items.length, event.clientX - rect.left, rect.width));
   }
 
   private updateView(): void {
@@ -467,6 +524,14 @@ export class GalleryRenderer extends MarkdownRenderChild {
     this.dotEls.forEach((dotEl, index) => {
       dotEl.classList.toggle("is-active", index === this.state.currentIndex);
       dotEl.setAttribute("aria-current", index === this.state.currentIndex ? "true" : "false");
+    });
+    this.previewButtonEls.forEach((buttonEl, index) => {
+      const active = index === this.state.currentIndex;
+      buttonEl.classList.toggle("is-active", active);
+      buttonEl.setAttribute("aria-current", active ? "true" : "false");
+      if (active && this.navigationLayout === "preview") {
+        buttonEl.scrollIntoView({ block: "nearest", inline: "nearest" });
+      }
     });
     this.updateNavigationPosition();
 
@@ -639,7 +704,53 @@ export class GalleryRenderer extends MarkdownRenderChild {
       return;
     }
 
+    this.currentRotation = rotation;
     this.mediaEl.style.setProperty("--og-media-rotation", `${rotation}deg`);
+    const rotatedQuarter = rotation % 180 !== 0;
+    this.mediaEl.classList.toggle("is-rotated-quarter", rotatedQuarter);
+
+    if (rotatedQuarter && this.viewportEl) {
+      this.mediaEl.style.setProperty("--og-media-box-width", `${this.viewportEl.clientHeight}px`);
+      this.mediaEl.style.setProperty("--og-media-box-height", `${this.viewportEl.clientWidth}px`);
+    } else {
+      this.mediaEl.style.removeProperty("--og-media-box-width");
+      this.mediaEl.style.removeProperty("--og-media-box-height");
+    }
+  }
+
+  private setButtonLabel(button: HTMLButtonElement, label: string): void {
+    setButtonLabel(button, label);
+    this.registerAutoHidingTooltip(button, label);
+  }
+
+  private registerAutoHidingTooltip(button: HTMLButtonElement, label: string): void {
+    let timeoutId: number | null = null;
+
+    const clearTimer = (): void => {
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+    };
+
+    const restoreLabel = (): void => {
+      clearTimer();
+      button.setAttribute("aria-label", label);
+    };
+
+    const scheduleHide = (): void => {
+      restoreLabel();
+      timeoutId = window.setTimeout(() => {
+        button.removeAttribute("aria-label");
+        timeoutId = null;
+      }, 5000);
+    };
+
+    this.registerDomEvent(button, "mouseenter", scheduleHide);
+    this.registerDomEvent(button, "focus", scheduleHide);
+    this.registerDomEvent(button, "mouseleave", restoreLabel);
+    this.registerDomEvent(button, "blur", restoreLabel);
+    this.register(clearTimer);
   }
 }
 

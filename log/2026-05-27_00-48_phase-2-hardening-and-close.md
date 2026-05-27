@@ -13,6 +13,7 @@
 - Добавлен adaptive rail mode: при ширине, недостаточной для точек, или при количестве элементов больше `15`, показывается только ползунок без точек.
 - Добавлен pure helper `src/render/navigationLayout.ts` и unit-тесты для выбора `dots`/`rail`.
 - Обновлена документация [[documentation/phase-2-captions]].
+- Добавлена заметка для будущей статьи: [[documentation/caption-rendering-case-study]].
 - Собранный плагин обновлён в `.obsidian/plugins/obsidian-gallery`.
 
 ## Проверки
@@ -26,6 +27,7 @@
 
 - Phase 2 объявлена закрытой.
 - Следующий этап по [[plan]] — Phase 3 Top Navigation.
+- Технические сложности compact Markdown rendering зафиксированы отдельно в [[documentation/caption-rendering-case-study]].
 
 ## Важно
 

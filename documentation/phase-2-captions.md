@@ -77,10 +77,10 @@ Caption text uses a compact `1.15` line height and minimal top padding so the fi
 
 ## Plain Navigation Hardening
 
-`src/render/navigationLayout.ts` chooses the top navigation layout from item count and available width:
+`src/render/navigationLayout.ts` was introduced during Phase 2 and completed in [[documentation/phase-3-top-navigation]]. It chooses the top navigation layout from item count and available width:
 
 - `dots` while the current item oval, the remaining item dots, and the minimum `3px` gaps fit inside the navigation width;
-- `rail` once that width is not enough or the gallery has more than `15` items.
+- `rail` once that width is not enough or the gallery has more than `10` items.
 
 The active item marker is always a fixed horizontal muted oval. In `dots` layout the other media items remain small circular buttons. In `rail` layout all circles are hidden and the same oval moves along an invisible horizontal rail; pointer drag and click map the rail position to the closest media index.
 
