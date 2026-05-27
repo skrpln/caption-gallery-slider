@@ -10,15 +10,14 @@
 - Добавлен чистый helper выбора top navigation layout и маппинга rail pointer position в индекс элемента.
 - Добавлен preview mode: горизонтальная полоса миниатюр внутри viewport, клик по миниатюре переключает текущий элемент.
 - Колесо/trackpad над preview strip прокручивает миниатюры, а не перелистывает основное изображение.
-- Button tooltips автоматически скрываются через `5` секунд после hover/focus и восстанавливаются после mouseleave/blur.
+- Gallery tooltips автоматически скрываются через `5` секунд после hover/focus и восстанавливаются после mouseleave/blur; для Obsidian-native tooltip popover добавлены CSS lifetime и fallback-закрытие уже открытой подсказки.
 - Исправлен поворот при `view: crop`: для `90`/`270` градусов media box пересчитывается под размеры viewport, поэтому rotated image снова обрезается как crop.
 - Добавлена документация [[documentation/phase-3-top-navigation]] и обновлена ссылка в [[documentation/_MOC]].
-- Проверки пройдены: `npm test` — 35 тестов, `npm run build` — успешно.
+- Проверки пройдены: `npm test` — 40 тестов, `npm run build` — успешно.
 - Собранный плагин обновлён в `/Users/nikita/Documents/Test Vault/.obsidian/plugins/obsidian-gallery`.
 - Ручная приемка оператором успешна: tooltip lifetime, preview navigation и rotated crop behavior приняты.
 
 Осталось:
-- Сделать commit текущей сессии.
 - Перейти к Phase 4 Video.
 
 ## Phase 2 — Captions
@@ -96,6 +95,10 @@
 # Log
 
 ## Phase 3 — Top Navigation
+
+### 2026-05-27 22:40 — Phase 3 Tooltip Lifetime Fix
+
+Сессия завершена результативно: исправлено зависание Obsidian-native tooltip поверх контента через CSS lifetime и fallback-закрытие уже открытой подсказки. Проверки прошли, ручная приемка оператором успешна. Подробности: [[log/2026-05-27_22-40_phase-3-tooltip-lifetime-fix]].
 
 ### 2026-05-27 20:21 — Phase 3 Top Navigation
 
