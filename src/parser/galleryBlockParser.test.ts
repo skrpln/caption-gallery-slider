@@ -36,6 +36,7 @@ view_height: 420
 caption_height: 96
 view: fit
 caption: true
+navigation: preview
 `);
 
     expect(result.ok).toBe(true);
@@ -46,6 +47,7 @@ caption: true
       expect(result.config.captionHeight).toBe(96);
       expect(result.config.view).toBe("fit");
       expect(result.config.caption).toBe(true);
+      expect(result.config.navigation).toBe("preview");
     }
   });
 
@@ -119,7 +121,7 @@ caption: maybe
     }
   });
 
-  it("rejects future-only Phase 1 options", () => {
+  it("rejects future-only grid options", () => {
     const result = parseGalleryBlock(`
 gallery_id: grid
 dir: Attachments
@@ -129,8 +131,8 @@ navigation: preview
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.errors).toContain("Only `grid: 1,1` is supported in Phase 1.");
-      expect(result.errors).toContain("Only `navigation: plain` is supported in Phase 1.");
+      expect(result.errors).toContain("Only `grid: 1,1` is supported before Phase 5.");
+      expect(result.errors).not.toContain("Only `navigation: plain` is supported in Phase 1.");
     }
   });
 });

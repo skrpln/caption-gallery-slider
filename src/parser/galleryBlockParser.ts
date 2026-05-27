@@ -129,11 +129,7 @@ function validateRawGalleryConfig(raw: RawGalleryConfig): GalleryParseResult {
   }
 
   if (grid.rows !== 1 || grid.columns !== 1) {
-    errors.push("Only `grid: 1,1` is supported in Phase 1.");
-  }
-
-  if (navigation !== "plain") {
-    errors.push("Only `navigation: plain` is supported in Phase 1.");
+    errors.push("Only `grid: 1,1` is supported before Phase 5.");
   }
 
   if (errors.length > 0) {
