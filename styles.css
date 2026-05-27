@@ -522,6 +522,24 @@
   text-align: center;
 }
 
+.tooltip.og-gallery__tooltip {
+  animation: og-gallery-tooltip-auto-hide var(--og-gallery-tooltip-lifetime, 5s) forwards;
+}
+
+@keyframes og-gallery-tooltip-auto-hide {
+  0%,
+  99% {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  100% {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
 .og-gallery:fullscreen {
   height: 100vh !important;
   border-radius: 0;

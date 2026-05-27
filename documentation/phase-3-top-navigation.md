@@ -31,7 +31,9 @@ Image thumbnails reuse Obsidian resource URLs through the same `getResourcePath(
 
 ## Tooltip Lifetime
 
-Obsidian shows button tooltips from `aria-label`. Gallery buttons keep their accessible label at rest, but while hovered or focused the label is removed after `5` seconds and restored on mouse leave or blur. This prevents persistent tooltips from covering media and captions during inspection.
+Obsidian shows tooltips from control labels. Gallery controls and labeled gallery regions keep their accessible label at rest, but while hovered or focused the label is removed after `5` seconds and restored on mouse leave or blur. This prevents persistent tooltips from covering media and captions during inspection.
+
+`src/render/autoHidingTooltip.ts` owns this lifecycle so every tooltip-like label follows the same timeout and cleanup path. The renderer also registers Obsidian-native tooltips with the `og-gallery__tooltip` class; CSS fades that tooltip popover after the same `5` second lifetime, and the timeout removes matching visible tooltip nodes as a fallback for already-open popovers.
 
 ## Rotation and View Modes
 
@@ -46,4 +48,5 @@ Phase 3 expands unit coverage for:
 - plain dots/rail threshold;
 - top navigation mode selection;
 - rail pointer-to-index mapping;
+- auto-hiding tooltip labels;
 - parser support for `navigation: preview`.

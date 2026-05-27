@@ -1,6 +1,6 @@
 // Documentation: [[documentation/architecture]]
 
-import { MarkdownRenderChild, setIcon } from "obsidian";
+import { MarkdownRenderChild, setIcon, setTooltip } from "obsidian";
 import type { GalleryConfig } from "../parser/galleryBlockParser";
 import type { GalleryItem } from "../media/mediaTypes";
 import { createGalleryState, goToIndex, nextIndex, previousIndex, type GalleryState } from "../state/galleryState";
@@ -10,6 +10,11 @@ import {
   navigationPointerToIndex,
   type TopNavigationLayout,
 } from "./navigationLayout";
+import {
+  AUTO_HIDING_TOOLTIP_CLASS,
+  registerAutoHidingTooltip,
+  setTooltipLabel,
+} from "./autoHidingTooltip";
 
 export interface GalleryRendererOptions {
   config: GalleryConfig;
@@ -136,7 +141,7 @@ export class GalleryRenderer extends MarkdownRenderChild {
   private createNavigation(): HTMLElement {
     const navEl = document.createElement("div");
     navEl.className = "og-gallery__nav";
-    navEl.setAttribute("aria-label", "gallery navigation");
+    this.setAccessibleTooltip(navEl, "gallery navigation");
     this.navEl = navEl;
     this.dotEls = [];
     this.previewButtonEls = [];
@@ -192,7 +197,7 @@ export class GalleryRenderer extends MarkdownRenderChild {
     const railEl = document.createElement("div");
     railEl.className = "og-gallery__nav-rail";
     railEl.setAttribute("role", "slider");
-    railEl.setAttribute("aria-label", "gallery position");
+    this.setAccessibleTooltip(railEl, "gallery position");
     railEl.setAttribute("aria-valuemin", "1");
     railEl.setAttribute("aria-valuemax", String(this.items.length));
     railEl.tabIndex = 0;
@@ -256,7 +261,7 @@ export class GalleryRenderer extends MarkdownRenderChild {
     const viewportEl = document.createElement("div");
     viewportEl.className = "og-gallery__viewport";
     viewportEl.tabIndex = 0;
-    viewportEl.setAttribute("aria-label", "gallery viewport");
+    this.setAccessibleTooltip(viewportEl, "gallery viewport");
     this.viewportEl = viewportEl;
 
     this.mediaEl = document.createElement("img");
@@ -339,8 +344,8 @@ export class GalleryRenderer extends MarkdownRenderChild {
 
     const previousButton = createArrowButton("previous", "left");
     const nextButton = createArrowButton("next", "right");
-    this.registerAutoHidingTooltip(previousButton, "previous");
-    this.registerAutoHidingTooltip(nextButton, "next");
+    this.setAccessibleTooltip(previousButton, "previous");
+    this.setAccessibleTooltip(nextButton, "next");
     this.registerDomEvent(previousButton, "click", () => this.previous());
     this.registerDomEvent(nextButton, "click", () => this.next());
 
@@ -351,7 +356,7 @@ export class GalleryRenderer extends MarkdownRenderChild {
   private createCaption(): HTMLElement {
     const captionEl = document.createElement("div");
     captionEl.className = "og-gallery__caption";
-    captionEl.setAttribute("aria-label", "gallery caption");
+    this.setAccessibleTooltip(captionEl, "gallery caption");
     this.captionEl = captionEl;
 
     const contentEl = document.createElement("div");
@@ -720,37 +725,14 @@ export class GalleryRenderer extends MarkdownRenderChild {
 
   private setButtonLabel(button: HTMLButtonElement, label: string): void {
     setButtonLabel(button, label);
-    this.registerAutoHidingTooltip(button, label);
+    this.setAccessibleTooltip(button, label);
   }
 
-  private registerAutoHidingTooltip(button: HTMLButtonElement, label: string): void {
-    let timeoutId: number | null = null;
-
-    const clearTimer = (): void => {
-      if (timeoutId !== null) {
-        window.clearTimeout(timeoutId);
-        timeoutId = null;
-      }
-    };
-
-    const restoreLabel = (): void => {
-      clearTimer();
-      button.setAttribute("aria-label", label);
-    };
-
-    const scheduleHide = (): void => {
-      restoreLabel();
-      timeoutId = window.setTimeout(() => {
-        button.removeAttribute("aria-label");
-        timeoutId = null;
-      }, 5000);
-    };
-
-    this.registerDomEvent(button, "mouseenter", scheduleHide);
-    this.registerDomEvent(button, "focus", scheduleHide);
-    this.registerDomEvent(button, "mouseleave", restoreLabel);
-    this.registerDomEvent(button, "blur", restoreLabel);
-    this.register(clearTimer);
+  private setAccessibleTooltip(element: HTMLElement, label: string): void {
+    const tooltip = registerAutoHidingTooltip(element, label, window, (targetEl, tooltipLabel) => {
+      setTooltip(targetEl, tooltipLabel, { classes: [AUTO_HIDING_TOOLTIP_CLASS] });
+    });
+    this.register(tooltip.destroy);
   }
 }
 
@@ -771,8 +753,7 @@ function createArrowButton(label: string, direction: "left" | "right"): HTMLButt
 }
 
 function setButtonLabel(button: HTMLButtonElement, label: string): void {
-  button.setAttribute("aria-label", label);
-  button.removeAttribute("title");
+  setTooltipLabel(button, label);
 }
 
 function createMessage(message: string): HTMLElement {
