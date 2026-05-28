@@ -1,5 +1,28 @@
 # Progress
 
+## Phase 4 — Video
+
+Текущий статус: Phase 4 закрыта и принята оператором. Код собран, установлен в vault, протестирован unit-тестами и ручной проверкой.
+
+Сделано:
+- Видео-форматы `mp4`, `avi`, `mov`, `webm` включены в общий media resolver вместе с изображениями.
+- Renderer создаёт `<video>` для video items и ставит текущее видео на паузу при уходе со слайда.
+- Добавлены минимальные video controls: play / pause, mute / unmute, loop и progress rail.
+- Playback state `autoplay`, `muted`, `loop` читается и сохраняется в caption frontmatter через тот же lazy caption path.
+- `navigation: preview` для видео показывает metadata-preloaded thumbnail с первым кадром и play-marker поверх него.
+- Video progress заменён с native `<input type="range">` на кастомный DOM rail с thumb того же размера и формы, что верхний navigation rail.
+- Клик по свободной области видео переключает play / pause; clicks по кнопкам, верхней навигации и progress rail не дублируют это действие.
+- Hover/focus подсветка кнопок `fullscreen`, `play/pause`, `mute`, `loop`, `rotate` приведена к единому translucent blur style.
+- Узкий layout video controls переносит progress rail на вторую строку, оставляя video-кнопки первым рядом.
+- Кнопка rotate осталась отдельной hover-only кнопкой в правом нижнем углу viewport.
+- Добавлена документация [[documentation/phase-4-video]]; обновлены [[documentation/_MOC]] и [[documentation/phase-3-top-navigation]].
+- Проверки пройдены: `npm test` — 44 теста, `npm run build` — успешно, `git diff --check` — без замечаний.
+- Собранный плагин обновлён в `/Users/nikita/Documents/Test Vault/.obsidian/plugins/obsidian-gallery`.
+- Ручная приемка оператором успешна: проверены `mp4` и `mov`, video controls, preview thumbnails, progress rail, click-to-play и responsive перенос controls.
+
+Осталось:
+- Перейти к Phase 5 Grid and Fullscreen.
+
 ## Phase 3 — Top Navigation
 
 Текущий статус: Phase 3 закрыта и принята оператором. Код собран, установлен в vault, протестирован unit-тестами и ручной проверкой.
@@ -93,6 +116,12 @@
 - Нужно ли для `sort: created|modified` сортировать по возрастанию или удобнее по убыванию для пользовательских галерей?
 
 # Log
+
+## Phase 4 — Video
+
+### 2026-05-29 01:00 — Phase 4 Video
+
+Сессия завершена результативно: добавлены видео как полноценный media type, custom controls, playback state в caption frontmatter, video thumbnails и полировка progress / click-to-play UX. Phase 4 принята оператором после ручной проверки `mp4` и `mov`. Подробности: [[log/2026-05-29_01-00_phase-4-video]].
 
 ## Phase 3 — Top Navigation
 

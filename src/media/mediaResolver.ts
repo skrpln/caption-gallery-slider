@@ -1,8 +1,8 @@
-// Documentation: [[documentation/architecture]]
+// Documentation: [[documentation/architecture]], [[documentation/phase-4-video]]
 
 import type { GalleryConfig, GallerySort } from "../parser/galleryBlockParser";
 import type { GalleryItem, GalleryMediaFile } from "./mediaTypes";
-import { isPhaseOneMedia } from "./mediaTypes";
+import { getMediaKind, isSupportedMedia } from "./mediaTypes";
 
 export interface VaultFolderLike {
   type: "folder";
@@ -66,12 +66,12 @@ export function resolveGalleryMedia(config: GalleryConfig, vault: VaultLike): Me
   }
 
   const items = Array.from(files.values())
-    .filter((file) => isPhaseOneMedia(file.extension))
+    .filter((file) => isSupportedMedia(file.extension))
     .map(toGalleryItem)
     .sort((left, right) => compareItems(left, right, config.sort));
 
   if (items.length === 0 && errors.length === 0) {
-    errors.push("No supported image files found.");
+    errors.push("No supported media files found.");
   }
 
   if (errors.length > 0) {
@@ -96,8 +96,10 @@ function collectFilesRecursive(folder: VaultFolderLike): VaultFileLike[] {
 }
 
 function toGalleryItem(file: VaultFileLike): GalleryItem {
+  const kind = getMediaKind(file.extension);
+
   return {
-    kind: "image",
+    kind: kind ?? "image",
     path: file.path,
     name: file.name,
     extension: file.extension.toLowerCase(),

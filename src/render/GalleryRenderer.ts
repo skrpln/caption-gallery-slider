@@ -1,10 +1,11 @@
-// Documentation: [[documentation/architecture]]
+// Documentation: [[documentation/architecture]], [[documentation/phase-4-video]]
 
 import { MarkdownRenderChild, setIcon, setTooltip } from "obsidian";
 import type { GalleryConfig } from "../parser/galleryBlockParser";
 import type { GalleryItem } from "../media/mediaTypes";
 import { createGalleryState, goToIndex, nextIndex, previousIndex, type GalleryState } from "../state/galleryState";
 import type { CaptionState } from "../captions/obsidianCaptionService";
+import { DEFAULT_VIDEO_PLAYBACK, type CaptionVideoPlayback } from "../captions/captionMarkdown";
 import {
   chooseTopNavigationLayout,
   navigationPointerToIndex,
@@ -23,6 +24,7 @@ export interface GalleryRendererOptions {
   getCaption?(item: GalleryItem): Promise<CaptionState>;
   saveCaption?(item: GalleryItem, body: string): Promise<CaptionState>;
   rotateCaption?(item: GalleryItem, rotation: number): Promise<CaptionState>;
+  saveVideoPlayback?(item: GalleryItem, playback: CaptionVideoPlayback): Promise<CaptionState>;
   openCaption?(item: GalleryItem): Promise<void>;
   renderCaptionMarkdown?(
     markdown: string,
@@ -39,6 +41,7 @@ export class GalleryRenderer extends MarkdownRenderChild {
   private readonly getCaption: ((item: GalleryItem) => Promise<CaptionState>) | null;
   private readonly saveCaption: ((item: GalleryItem, body: string) => Promise<CaptionState>) | null;
   private readonly rotateCaption: ((item: GalleryItem, rotation: number) => Promise<CaptionState>) | null;
+  private readonly saveVideoPlayback: ((item: GalleryItem, playback: CaptionVideoPlayback) => Promise<CaptionState>) | null;
   private readonly openCaption: ((item: GalleryItem) => Promise<void>) | null;
   private readonly renderCaptionMarkdown: GalleryRendererOptions["renderCaptionMarkdown"] | null;
   private state: GalleryState;
@@ -50,7 +53,12 @@ export class GalleryRenderer extends MarkdownRenderChild {
   private captionState: CaptionState | null = null;
   private fullscreenButtonEl: HTMLButtonElement | null = null;
   private rotateButtonEl: HTMLButtonElement | null = null;
-  private mediaEl: HTMLImageElement | null = null;
+  private mediaEl: HTMLImageElement | HTMLVideoElement | null = null;
+  private videoControlsEl: HTMLElement | null = null;
+  private videoPlayButtonEl: HTMLButtonElement | null = null;
+  private videoMuteButtonEl: HTMLButtonElement | null = null;
+  private videoLoopButtonEl: HTMLButtonElement | null = null;
+  private videoProgressEl: HTMLElement | null = null;
   private navEl: HTMLElement | null = null;
   private navRailEl: HTMLElement | null = null;
   private navThumbEl: HTMLElement | null = null;
@@ -59,9 +67,11 @@ export class GalleryRenderer extends MarkdownRenderChild {
   private navigationLayout: TopNavigationLayout = "dots";
   private navigationResizeObserver: ResizeObserver | null = null;
   private draggingNavigation = false;
+  private draggingVideoProgress = false;
   private pointerStartX: number | null = null;
   private lastWheelNavigationAt = 0;
   private currentRotation = 0;
+  private currentPlayback: CaptionVideoPlayback = DEFAULT_VIDEO_PLAYBACK;
   private inputActive = false;
   private captionEditing = false;
   private captionRenderToken = 0;
@@ -75,6 +85,7 @@ export class GalleryRenderer extends MarkdownRenderChild {
     this.getCaption = options.getCaption ?? null;
     this.saveCaption = options.saveCaption ?? null;
     this.rotateCaption = options.rotateCaption ?? null;
+    this.saveVideoPlayback = options.saveVideoPlayback ?? null;
     this.openCaption = options.openCaption ?? null;
     this.renderCaptionMarkdown = options.renderCaptionMarkdown ?? null;
     this.state = createGalleryState(options.items.length);
@@ -95,7 +106,7 @@ export class GalleryRenderer extends MarkdownRenderChild {
     this.containerEl.appendChild(root);
 
     if (this.items.length === 0) {
-      root.appendChild(createMessage("No supported image files found."));
+      root.appendChild(createMessage("No supported media files found."));
       return;
     }
 
@@ -166,17 +177,31 @@ export class GalleryRenderer extends MarkdownRenderChild {
       this.setButtonLabel(previewButtonEl, `item ${index + 1}`);
       this.registerDomEvent(previewButtonEl, "click", () => this.goTo(index));
 
-      const resourcePath = item.kind === "image" ? this.getResourcePath(item.path) : null;
+      const resourcePath = this.getResourcePath(item.path);
       if (resourcePath) {
-        const imageEl = document.createElement("img");
-        imageEl.src = resourcePath;
-        imageEl.alt = "";
-        imageEl.loading = "lazy";
-        imageEl.decoding = "async";
-        previewButtonEl.appendChild(imageEl);
+        if (item.kind === "video") {
+          previewButtonEl.classList.add("is-video");
+          const videoEl = document.createElement("video");
+          videoEl.src = buildVideoPreviewSrc(resourcePath);
+          videoEl.muted = true;
+          videoEl.playsInline = true;
+          videoEl.preload = "metadata";
+          videoEl.setAttribute("aria-hidden", "true");
+          const playIconEl = document.createElement("span");
+          playIconEl.className = "og-gallery__preview-play";
+          setIcon(playIconEl, "play");
+          previewButtonEl.append(videoEl, playIconEl);
+        } else {
+          const imageEl = document.createElement("img");
+          imageEl.src = resourcePath;
+          imageEl.alt = "";
+          imageEl.loading = "lazy";
+          imageEl.decoding = "async";
+          previewButtonEl.appendChild(imageEl);
+        }
       } else {
         const placeholderEl = document.createElement("span");
-        placeholderEl.textContent = item.kind === "video" ? "vid" : item.name.slice(0, 3);
+        placeholderEl.textContent = item.name.slice(0, 3);
         previewButtonEl.appendChild(placeholderEl);
       }
 
@@ -264,19 +289,28 @@ export class GalleryRenderer extends MarkdownRenderChild {
     this.setAccessibleTooltip(viewportEl, "gallery viewport");
     this.viewportEl = viewportEl;
 
-    this.mediaEl = document.createElement("img");
-    this.mediaEl.className = "og-gallery__media";
-    this.mediaEl.loading = "lazy";
-    this.mediaEl.decoding = "async";
     const fullscreenButton = this.createFullscreenButton();
     const rotateButton = this.createRotateButton();
+    const videoControlsEl = this.createVideoControls();
 
     this.registerDomEvent(viewportEl, "pointerdown", (event: PointerEvent) => {
       this.setInputActive(true);
       this.pointerStartX = event.clientX;
     });
 
-    this.registerDomEvent(viewportEl, "click", () => this.setInputActive(true));
+    this.registerDomEvent(viewportEl, "click", (event: MouseEvent) => {
+      this.setInputActive(true);
+      if (event.target instanceof HTMLElement && event.target.closest(
+        "button, .og-gallery__video-controls, .og-gallery__nav",
+      )) {
+        return;
+      }
+
+      const item = this.items[this.state.currentIndex];
+      if (item?.kind === "video") {
+        void this.toggleVideoPlayback();
+      }
+    });
 
     this.registerDomEvent(document, "pointerdown", (event: PointerEvent) => {
       if (!this.viewportEl || !(event.target instanceof Node)) {
@@ -288,6 +322,10 @@ export class GalleryRenderer extends MarkdownRenderChild {
 
     this.registerDomEvent(viewportEl, "wheel", (event: WheelEvent) => {
       if (event.target instanceof HTMLElement && event.target.closest(".og-gallery__preview")) {
+        return;
+      }
+
+      if (event.target instanceof HTMLElement && event.target.closest(".og-gallery__video-controls")) {
         return;
       }
 
@@ -334,8 +372,111 @@ export class GalleryRenderer extends MarkdownRenderChild {
       }
     });
 
-    viewportEl.append(this.mediaEl, fullscreenButton, rotateButton);
+    viewportEl.append(videoControlsEl, fullscreenButton, rotateButton);
     return viewportEl;
+  }
+
+  private createVideoControls(): HTMLElement {
+    const controlsEl = document.createElement("div");
+    controlsEl.className = "og-gallery__video-controls";
+    this.videoControlsEl = controlsEl;
+
+    this.registerDomEvent(controlsEl, "pointerdown", (event: PointerEvent) => {
+      event.stopPropagation();
+    });
+
+    this.registerDomEvent(controlsEl, "click", (event: MouseEvent) => {
+      event.stopPropagation();
+    });
+
+    const playButtonEl = this.createVideoButton("play", "play");
+    const muteButtonEl = this.createVideoButton("sound off", "volume-x");
+    const loopButtonEl = this.createVideoButton("loop", "infinity");
+    const progressEl = document.createElement("div");
+    progressEl.className = "og-gallery__video-progress";
+    progressEl.setAttribute("role", "slider");
+    progressEl.setAttribute("aria-valuemin", "0");
+    progressEl.setAttribute("aria-valuemax", "1000");
+    progressEl.setAttribute("aria-valuenow", "0");
+    progressEl.tabIndex = 0;
+    const progressThumbEl = document.createElement("div");
+    progressThumbEl.className = "og-gallery__video-progress-thumb";
+    progressEl.appendChild(progressThumbEl);
+    this.setAccessibleTooltip(progressEl, "video position");
+
+    this.videoPlayButtonEl = playButtonEl;
+    this.videoMuteButtonEl = muteButtonEl;
+    this.videoLoopButtonEl = loopButtonEl;
+    this.videoProgressEl = progressEl;
+
+    this.registerDomEvent(playButtonEl, "click", (event: MouseEvent) => {
+      event.preventDefault();
+      void this.toggleVideoPlayback();
+    });
+
+    this.registerDomEvent(muteButtonEl, "click", (event: MouseEvent) => {
+      event.preventDefault();
+      void this.toggleVideoMuted();
+    });
+
+    this.registerDomEvent(loopButtonEl, "click", (event: MouseEvent) => {
+      event.preventDefault();
+      void this.toggleVideoLoop();
+    });
+
+    this.registerDomEvent(progressEl, "pointerdown", (event: PointerEvent) => {
+      event.preventDefault();
+      this.draggingVideoProgress = true;
+      progressEl.setPointerCapture(event.pointerId);
+      this.seekVideoFromProgressPointer(event);
+    });
+
+    this.registerDomEvent(progressEl, "pointermove", (event: PointerEvent) => {
+      if (!this.draggingVideoProgress) {
+        return;
+      }
+
+      event.preventDefault();
+      this.seekVideoFromProgressPointer(event);
+    });
+
+    this.registerDomEvent(progressEl, "pointerup", (event: PointerEvent) => {
+      this.draggingVideoProgress = false;
+      if (progressEl.hasPointerCapture(event.pointerId)) {
+        progressEl.releasePointerCapture(event.pointerId);
+      }
+    });
+
+    this.registerDomEvent(progressEl, "pointercancel", (event: PointerEvent) => {
+      this.draggingVideoProgress = false;
+      if (progressEl.hasPointerCapture(event.pointerId)) {
+        progressEl.releasePointerCapture(event.pointerId);
+      }
+    });
+
+    this.registerDomEvent(progressEl, "keydown", (event: KeyboardEvent) => {
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        this.seekVideoByStep(-5);
+      }
+
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        this.seekVideoByStep(5);
+      }
+    });
+
+    controlsEl.append(playButtonEl, muteButtonEl, loopButtonEl, progressEl);
+    return controlsEl;
+  }
+
+  private createVideoButton(label: string, icon: string): HTMLButtonElement {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "og-gallery__video-button";
+    this.setButtonLabel(button, label);
+    setIcon(button, icon);
+    return button;
   }
 
   private createControls(): HTMLElement {
@@ -511,20 +652,30 @@ export class GalleryRenderer extends MarkdownRenderChild {
   private updateView(): void {
     const item = this.items[this.state.currentIndex];
 
-    if (!item || !this.mediaEl) {
+    if (!item) {
       return;
     }
 
+    this.pauseCurrentVideo();
+    this.ensureMediaElement(item);
     const resourcePath = this.getResourcePath(item.path);
     if (!resourcePath) {
-      this.mediaEl.removeAttribute("src");
-      this.mediaEl.alt = `Unable to load ${item.name}`;
+      this.mediaEl?.removeAttribute("src");
+      this.mediaEl?.setAttribute("aria-label", `Unable to load ${item.name}`);
       return;
     }
 
-    this.mediaEl.src = resourcePath;
-    this.mediaEl.alt = item.name;
+    if (this.mediaEl instanceof HTMLImageElement) {
+      this.mediaEl.src = resourcePath;
+      this.mediaEl.alt = item.name;
+    } else if (this.mediaEl instanceof HTMLVideoElement) {
+      this.mediaEl.src = resourcePath;
+      this.mediaEl.setAttribute("aria-label", item.name);
+      this.mediaEl.load();
+    }
+
     this.applyRotation(0);
+    this.applyVideoPlayback(DEFAULT_VIDEO_PLAYBACK);
 
     this.dotEls.forEach((dotEl, index) => {
       dotEl.classList.toggle("is-active", index === this.state.currentIndex);
@@ -543,24 +694,70 @@ export class GalleryRenderer extends MarkdownRenderChild {
     void this.updateCaption(item);
   }
 
-  private async updateCaption(item: GalleryItem): Promise<void> {
-    if (!this.captionEl || !this.captionContentEl) {
+  private ensureMediaElement(item: GalleryItem): void {
+    if (!this.viewportEl) {
       return;
     }
 
+    const expectedTag = item.kind === "video" ? "VIDEO" : "IMG";
+    if (this.mediaEl?.tagName === expectedTag) {
+      this.viewportEl.classList.toggle("is-video", item.kind === "video");
+      this.viewportEl.classList.toggle("is-image", item.kind === "image");
+      return;
+    }
+
+    this.pauseCurrentVideo();
+    this.mediaEl?.remove();
+
+    this.mediaEl = item.kind === "video"
+      ? this.createVideoElement()
+      : this.createImageElement();
+    this.viewportEl.prepend(this.mediaEl);
+    this.viewportEl.classList.toggle("is-video", item.kind === "video");
+    this.viewportEl.classList.toggle("is-image", item.kind === "image");
+    this.updateVideoControls();
+  }
+
+  private createImageElement(): HTMLImageElement {
+    const imageEl = document.createElement("img");
+    imageEl.className = "og-gallery__media";
+    imageEl.loading = "lazy";
+    imageEl.decoding = "async";
+    return imageEl;
+  }
+
+  private createVideoElement(): HTMLVideoElement {
+    const videoEl = document.createElement("video");
+    videoEl.className = "og-gallery__media";
+    videoEl.preload = "metadata";
+    videoEl.controls = false;
+    videoEl.playsInline = true;
+
+    this.registerDomEvent(videoEl, "timeupdate", () => this.updateVideoProgress());
+    this.registerDomEvent(videoEl, "durationchange", () => this.updateVideoProgress());
+    this.registerDomEvent(videoEl, "play", () => this.updateVideoControls());
+    this.registerDomEvent(videoEl, "pause", () => this.updateVideoControls());
+    this.registerDomEvent(videoEl, "ended", () => this.updateVideoControls());
+
+    return videoEl;
+  }
+
+  private async updateCaption(item: GalleryItem): Promise<void> {
     const token = (this.captionRenderToken += 1);
     this.captionEditing = false;
     this.captionState = null;
-    this.captionContentEl.contentEditable = "false";
-    this.captionContentEl.classList.remove("markdown-rendered");
-    this.captionContentEl.removeAttribute("data-placeholder");
-    this.captionContentEl.empty();
-    this.captionContentEl.textContent = "Loading caption...";
-    this.captionEl.classList.remove("is-disabled", "is-editing", "is-empty");
-    this.captionOpenButtonEl?.classList.add("is-hidden");
+    if (this.captionEl && this.captionContentEl) {
+      this.captionContentEl.contentEditable = "false";
+      this.captionContentEl.classList.remove("markdown-rendered");
+      this.captionContentEl.removeAttribute("data-placeholder");
+      this.captionContentEl.empty();
+      this.captionContentEl.textContent = "Loading caption...";
+      this.captionEl.classList.remove("is-disabled", "is-editing", "is-empty");
+      this.captionOpenButtonEl?.classList.add("is-hidden");
+    }
 
     const caption = await this.getCaption?.(item);
-    if (token !== this.captionRenderToken || !this.captionEl || !this.captionContentEl) {
+    if (token !== this.captionRenderToken) {
       return;
     }
 
@@ -570,7 +767,15 @@ export class GalleryRenderer extends MarkdownRenderChild {
       body: "",
       exists: false,
       rotation: 0,
+      playback: DEFAULT_VIDEO_PLAYBACK,
     };
+
+    this.applyRotation(this.captionState.rotation);
+    this.applyVideoPlayback(this.captionState.playback);
+
+    if (!this.captionEl || !this.captionContentEl) {
+      return;
+    }
 
     if (!caption || caption.status === "unconfigured") {
       delete this.captionEl.dataset.captionPath;
@@ -578,11 +783,9 @@ export class GalleryRenderer extends MarkdownRenderChild {
       this.captionContentEl.empty();
       appendEmphasisLine(this.captionContentEl, "choose directory for gallery captions storage");
       appendEmphasisLine(this.captionContentEl, "Settings > Community plugins > Obsidian Gallery > Caption folder");
-      this.applyRotation(0);
       return;
     }
 
-    this.applyRotation(caption.rotation);
     this.captionEl.dataset.captionPath = caption.path;
     this.captionOpenButtonEl?.classList.remove("is-hidden");
 
@@ -723,6 +926,169 @@ export class GalleryRenderer extends MarkdownRenderChild {
     }
   }
 
+  private applyVideoPlayback(playback: CaptionVideoPlayback): void {
+    this.currentPlayback = playback;
+    const videoEl = this.getCurrentVideoElement();
+    if (!videoEl) {
+      this.updateVideoControls();
+      return;
+    }
+
+    videoEl.muted = playback.muted;
+    videoEl.loop = playback.loop;
+    if (playback.autoplay) {
+      void videoEl.play().catch(() => {
+        this.updateVideoControls();
+      });
+    } else {
+      videoEl.pause();
+    }
+    this.updateVideoControls();
+  }
+
+  private async toggleVideoPlayback(): Promise<void> {
+    const videoEl = this.getCurrentVideoElement();
+    if (!videoEl) {
+      return;
+    }
+
+    if (videoEl.paused) {
+      await videoEl.play().catch(() => undefined);
+      await this.persistVideoPlayback({ ...this.currentPlayback, autoplay: true });
+    } else {
+      videoEl.pause();
+      await this.persistVideoPlayback({ ...this.currentPlayback, autoplay: false });
+    }
+
+    this.updateVideoControls();
+  }
+
+  private async toggleVideoMuted(): Promise<void> {
+    const videoEl = this.getCurrentVideoElement();
+    if (!videoEl) {
+      return;
+    }
+
+    const playback = { ...this.currentPlayback, muted: !videoEl.muted };
+    videoEl.muted = playback.muted;
+    await this.persistVideoPlayback(playback);
+    this.updateVideoControls();
+  }
+
+  private async toggleVideoLoop(): Promise<void> {
+    const videoEl = this.getCurrentVideoElement();
+    if (!videoEl) {
+      return;
+    }
+
+    const playback = { ...this.currentPlayback, loop: !videoEl.loop };
+    videoEl.loop = playback.loop;
+    await this.persistVideoPlayback(playback);
+    this.updateVideoControls();
+  }
+
+  private async persistVideoPlayback(playback: CaptionVideoPlayback): Promise<void> {
+    const item = this.items[this.state.currentIndex];
+    this.currentPlayback = playback;
+    if (!item || item.kind !== "video" || !this.saveVideoPlayback) {
+      return;
+    }
+
+    const nextState = await this.saveVideoPlayback(item, playback);
+    if (nextState.status === "unconfigured") {
+      return;
+    }
+
+    this.captionState = nextState;
+    this.currentPlayback = nextState.playback;
+    this.captionOpenButtonEl?.classList.remove("is-hidden");
+    if (this.captionEl && nextState.path) {
+      this.captionEl.dataset.captionPath = nextState.path;
+    }
+  }
+
+  private seekVideoFromProgressPointer(event: PointerEvent): void {
+    const videoEl = this.getCurrentVideoElement();
+    if (!videoEl || !this.videoProgressEl || !Number.isFinite(videoEl.duration) || videoEl.duration <= 0) {
+      return;
+    }
+
+    const rect = this.videoProgressEl.getBoundingClientRect();
+    const ratio = clamp((event.clientX - rect.left) / rect.width, 0, 1);
+    videoEl.currentTime = ratio * videoEl.duration;
+    this.updateVideoProgress();
+  }
+
+  private seekVideoByStep(seconds: number): void {
+    const videoEl = this.getCurrentVideoElement();
+    if (!videoEl || !Number.isFinite(videoEl.duration) || videoEl.duration <= 0) {
+      return;
+    }
+
+    videoEl.currentTime = clamp(videoEl.currentTime + seconds, 0, videoEl.duration);
+    this.updateVideoProgress();
+  }
+
+  private updateVideoProgress(): void {
+    const videoEl = this.getCurrentVideoElement();
+    if (!videoEl || !this.videoProgressEl || !Number.isFinite(videoEl.duration) || videoEl.duration <= 0) {
+      if (this.videoProgressEl) {
+        this.videoProgressEl.style.setProperty("--og-video-progress", "0");
+        this.videoProgressEl.setAttribute("aria-valuenow", "0");
+      }
+      return;
+    }
+
+    const progress = Math.round((videoEl.currentTime / videoEl.duration) * 1000);
+    this.videoProgressEl.style.setProperty("--og-video-progress", String(progress / 1000));
+    this.videoProgressEl.setAttribute("aria-valuenow", String(progress));
+  }
+
+  private updateVideoControls(): void {
+    const videoEl = this.getCurrentVideoElement();
+    const isVideo = Boolean(videoEl);
+    this.videoControlsEl?.classList.toggle("is-visible", isVideo);
+
+    if (!videoEl) {
+      return;
+    }
+
+    const playing = !videoEl.paused && !videoEl.ended;
+    const muted = videoEl.muted;
+    const loop = videoEl.loop;
+
+    this.videoPlayButtonEl?.empty();
+    this.videoMuteButtonEl?.empty();
+    this.videoLoopButtonEl?.classList.toggle("is-active", loop);
+
+    if (this.videoPlayButtonEl) {
+      setIcon(this.videoPlayButtonEl, playing ? "pause" : "play");
+      setTooltipLabel(this.videoPlayButtonEl, playing ? "pause" : "play");
+    }
+
+    if (this.videoMuteButtonEl) {
+      setIcon(this.videoMuteButtonEl, muted ? "volume-2" : "volume-x");
+      setTooltipLabel(this.videoMuteButtonEl, muted ? "sound on" : "sound off");
+    }
+
+    if (this.videoLoopButtonEl) {
+      setIcon(this.videoLoopButtonEl, "infinity");
+      setTooltipLabel(this.videoLoopButtonEl, loop ? "loop on" : "loop off");
+    }
+
+    this.updateVideoProgress();
+  }
+
+  private getCurrentVideoElement(): HTMLVideoElement | null {
+    return this.mediaEl instanceof HTMLVideoElement ? this.mediaEl : null;
+  }
+
+  private pauseCurrentVideo(): void {
+    if (this.mediaEl instanceof HTMLVideoElement) {
+      this.mediaEl.pause();
+    }
+  }
+
   private setButtonLabel(button: HTMLButtonElement, label: string): void {
     setButtonLabel(button, label);
     this.setAccessibleTooltip(button, label);
@@ -786,4 +1152,12 @@ function placeCaretAtEnd(contentEl: HTMLElement): void {
   range.collapse(false);
   selection.removeAllRanges();
   selection.addRange(range);
+}
+
+function buildVideoPreviewSrc(resourcePath: string): string {
+  return resourcePath.includes("#") ? resourcePath : `${resourcePath}#t=0.001`;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }

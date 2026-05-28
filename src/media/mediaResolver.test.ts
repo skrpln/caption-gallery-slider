@@ -64,6 +64,26 @@ describe("resolveGalleryMedia", () => {
     }
   });
 
+  it("resolves supported video files as video items", () => {
+    const vault = createVault([
+      folder("Attachments", [
+        file("Attachments/clip.mp4", 1),
+        file("Attachments/movie.webm", 2),
+        file("Attachments/skip.txt", 3),
+      ]),
+    ]);
+
+    const result = resolveGalleryMedia(config({ dir: "Attachments" }), vault);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.items).toEqual([
+        expect.objectContaining({ kind: "video", path: "Attachments/clip.mp4" }),
+        expect.objectContaining({ kind: "video", path: "Attachments/movie.webm" }),
+      ]);
+    }
+  });
+
   it("reports missing paths", () => {
     const result = resolveGalleryMedia(
       config({ dir: "Missing", list: ["Nope.png"] }),
