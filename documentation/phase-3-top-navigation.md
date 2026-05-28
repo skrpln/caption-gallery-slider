@@ -27,7 +27,7 @@ The renderer keeps only DOM responsibilities: creating buttons, updating active 
 
 Preview thumbnails are rendered as square buttons with the same visual scale as the compact gallery controls. The strip is constrained by the viewport width and scrolls horizontally when the media set is longer than the visible area.
 
-Image thumbnails reuse Obsidian resource URLs through the same `getResourcePath()` adapter as the main viewport. Future video items can use a lightweight text placeholder until Phase 4 adds video poster handling.
+Image and video thumbnails reuse Obsidian resource URLs through the same `getResourcePath()` adapter as the main viewport. Video thumbnails render a metadata-preloaded `<video>` preview with a centered play marker.
 
 ## Tooltip Lifetime
 

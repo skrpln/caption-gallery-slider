@@ -1,4 +1,4 @@
-// Documentation: [[documentation/architecture]]
+// Documentation: [[documentation/architecture]], [[documentation/phase-4-video]]
 
 export type MediaKind = "image" | "video";
 
@@ -38,6 +38,6 @@ export function getMediaKind(extension: string): MediaKind | null {
   return null;
 }
 
-export function isPhaseOneMedia(extension: string): boolean {
-  return getMediaKind(extension) === "image";
+export function isSupportedMedia(extension: string): boolean {
+  return getMediaKind(extension) !== null;
 }

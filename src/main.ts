@@ -43,6 +43,7 @@ export default class ObsidianGalleryPlugin extends Plugin {
         getCaption: (item) => captionService.readCaption(parseResult.config, item),
         saveCaption: (item, body) => captionService.saveCaption(parseResult.config, item, body),
         rotateCaption: (item, rotation) => captionService.rotateCaption(parseResult.config, item, rotation),
+        saveVideoPlayback: (item, playback) => captionService.saveVideoPlayback(parseResult.config, item, playback),
         openCaption: (item) => captionService.openCaption(parseResult.config, item),
         renderCaptionMarkdown: (markdown, containerEl, sourcePath, component) =>
           renderCaptionMarkdown(this.app, markdown, containerEl, sourcePath, component, HOVER_SOURCE_ID),

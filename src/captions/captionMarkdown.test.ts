@@ -2,9 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   createCaptionMarkdown,
   normalizeRotation,
+  readFrontmatterBoolean,
   readFrontmatterNumber,
+  readVideoPlayback,
   splitCaptionMarkdown,
+  upsertFrontmatterBoolean,
   upsertFrontmatterNumber,
+  upsertVideoPlayback,
 } from "./captionMarkdown";
 
 describe("splitCaptionMarkdown", () => {
@@ -34,6 +38,18 @@ describe("createCaptionMarkdown", () => {
       }),
     ).toBe('---\ngallery_id: "vacation"\ntarget: "img"\nsource_path: "Attachments/photo.png"\nrotation: 0\n---\nCaption body');
   });
+
+  it("can include video playback frontmatter", () => {
+    expect(
+      createCaptionMarkdown({
+        galleryId: "vacation",
+        target: "vid",
+        sourcePath: "Attachments/clip.mp4",
+        body: "",
+        playback: { autoplay: false, muted: true, loop: true },
+      }),
+    ).toBe('---\ngallery_id: "vacation"\ntarget: "vid"\nsource_path: "Attachments/clip.mp4"\nrotation: 0\nautoplay: false\nmuted: true\nloop: true\n---\n');
+  });
 });
 
 describe("caption frontmatter numbers", () => {
@@ -46,5 +62,21 @@ describe("caption frontmatter numbers", () => {
   it("normalizes rotation to one clockwise circle", () => {
     expect(normalizeRotation(450)).toBe(90);
     expect(normalizeRotation(-90)).toBe(270);
+  });
+});
+
+describe("caption frontmatter booleans", () => {
+  it("reads and updates playback flags", () => {
+    const frontmatter = "autoplay: true\nmuted: false\nloop: true";
+
+    expect(readFrontmatterBoolean(frontmatter, "autoplay", false)).toBe(true);
+    expect(readVideoPlayback(frontmatter)).toEqual({ autoplay: true, muted: false, loop: true });
+    expect(upsertFrontmatterBoolean("muted: false", "muted", true)).toBe("muted: true");
+    expect(upsertFrontmatterBoolean("gallery_id: test", "loop", true)).toBe("gallery_id: test\nloop: true");
+  });
+
+  it("upserts all video playback flags", () => {
+    expect(upsertVideoPlayback("gallery_id: test", { autoplay: true, muted: true, loop: false }))
+      .toBe("gallery_id: test\nautoplay: true\nmuted: true\nloop: false");
   });
 });
