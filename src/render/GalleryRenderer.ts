@@ -1,7 +1,8 @@
-// Documentation: [[documentation/architecture]], [[documentation/phase-4-video]]
+// Documentation: [[documentation/architecture]], [[documentation/phase-4-video]], [[documentation/widget-size-controls]]
 
 import { MarkdownRenderChild, setIcon, setTooltip } from "obsidian";
 import type { GalleryConfig } from "../parser/galleryBlockParser";
+import type { GallerySizeOption } from "../parser/galleryBlockEditor";
 import type { GalleryItem } from "../media/mediaTypes";
 import { createGalleryState, goToIndex, nextIndex, previousIndex, type GalleryState } from "../state/galleryState";
 import type { CaptionState } from "../captions/obsidianCaptionService";
@@ -26,6 +27,7 @@ export interface GalleryRendererOptions {
   rotateCaption?(item: GalleryItem, rotation: number): Promise<CaptionState>;
   saveVideoPlayback?(item: GalleryItem, playback: CaptionVideoPlayback): Promise<CaptionState>;
   openCaption?(item: GalleryItem): Promise<void>;
+  saveSizeOption?(option: GallerySizeOption, value: number): Promise<void>;
   renderCaptionMarkdown?(
     markdown: string,
     containerEl: HTMLElement,
@@ -33,6 +35,18 @@ export interface GalleryRendererOptions {
     component: MarkdownRenderChild,
   ): Promise<void>;
 }
+
+interface GalleryResizeState {
+  option: GallerySizeOption;
+  pointerId: number;
+  handleEl: HTMLElement;
+  startY: number;
+  startHeight: number;
+}
+
+const MIN_VIEW_HEIGHT = 120;
+const MIN_CAPTION_HEIGHT = 28;
+const MAX_GALLERY_SIZE = 1400;
 
 export class GalleryRenderer extends MarkdownRenderChild {
   private readonly config: GalleryConfig;
@@ -43,6 +57,7 @@ export class GalleryRenderer extends MarkdownRenderChild {
   private readonly rotateCaption: ((item: GalleryItem, rotation: number) => Promise<CaptionState>) | null;
   private readonly saveVideoPlayback: ((item: GalleryItem, playback: CaptionVideoPlayback) => Promise<CaptionState>) | null;
   private readonly openCaption: ((item: GalleryItem) => Promise<void>) | null;
+  private readonly saveSizeOption: ((option: GallerySizeOption, value: number) => Promise<void>) | null;
   private readonly renderCaptionMarkdown: GalleryRendererOptions["renderCaptionMarkdown"] | null;
   private state: GalleryState;
   private rootEl: HTMLElement | null = null;
@@ -76,6 +91,7 @@ export class GalleryRenderer extends MarkdownRenderChild {
   private captionEditing = false;
   private captionRenderToken = 0;
   private captionSaveToken = 0;
+  private resizeState: GalleryResizeState | null = null;
 
   constructor(containerEl: HTMLElement, options: GalleryRendererOptions) {
     super(containerEl);
@@ -87,6 +103,7 @@ export class GalleryRenderer extends MarkdownRenderChild {
     this.rotateCaption = options.rotateCaption ?? null;
     this.saveVideoPlayback = options.saveVideoPlayback ?? null;
     this.openCaption = options.openCaption ?? null;
+    this.saveSizeOption = options.saveSizeOption ?? null;
     this.renderCaptionMarkdown = options.renderCaptionMarkdown ?? null;
     this.state = createGalleryState(options.items.length);
   }
@@ -152,7 +169,6 @@ export class GalleryRenderer extends MarkdownRenderChild {
   private createNavigation(): HTMLElement {
     const navEl = document.createElement("div");
     navEl.className = "og-gallery__nav";
-    this.setAccessibleTooltip(navEl, "gallery navigation");
     this.navEl = navEl;
     this.dotEls = [];
     this.previewButtonEls = [];
@@ -174,7 +190,6 @@ export class GalleryRenderer extends MarkdownRenderChild {
       const previewButtonEl = document.createElement("button");
       previewButtonEl.type = "button";
       previewButtonEl.className = "og-gallery__preview-item";
-      this.setButtonLabel(previewButtonEl, `item ${index + 1}`);
       this.registerDomEvent(previewButtonEl, "click", () => this.goTo(index));
 
       const resourcePath = this.getResourcePath(item.path);
@@ -213,7 +228,6 @@ export class GalleryRenderer extends MarkdownRenderChild {
       const dotEl = document.createElement("button");
       dotEl.type = "button";
       dotEl.className = "og-gallery__dot";
-      this.setButtonLabel(dotEl, `item ${index + 1}`);
       this.registerDomEvent(dotEl, "click", () => this.goTo(index));
       navEl.appendChild(dotEl);
       this.dotEls.push(dotEl);
@@ -222,7 +236,6 @@ export class GalleryRenderer extends MarkdownRenderChild {
     const railEl = document.createElement("div");
     railEl.className = "og-gallery__nav-rail";
     railEl.setAttribute("role", "slider");
-    this.setAccessibleTooltip(railEl, "gallery position");
     railEl.setAttribute("aria-valuemin", "1");
     railEl.setAttribute("aria-valuemax", String(this.items.length));
     railEl.tabIndex = 0;
@@ -286,12 +299,12 @@ export class GalleryRenderer extends MarkdownRenderChild {
     const viewportEl = document.createElement("div");
     viewportEl.className = "og-gallery__viewport";
     viewportEl.tabIndex = 0;
-    this.setAccessibleTooltip(viewportEl, "gallery viewport");
     this.viewportEl = viewportEl;
 
     const fullscreenButton = this.createFullscreenButton();
     const rotateButton = this.createRotateButton();
     const videoControlsEl = this.createVideoControls();
+    const resizeHandleEl = this.createResizeHandle("view_height");
 
     this.registerDomEvent(viewportEl, "pointerdown", (event: PointerEvent) => {
       this.setInputActive(true);
@@ -372,7 +385,7 @@ export class GalleryRenderer extends MarkdownRenderChild {
       }
     });
 
-    viewportEl.append(videoControlsEl, fullscreenButton, rotateButton);
+    viewportEl.append(videoControlsEl, fullscreenButton, rotateButton, resizeHandleEl);
     return viewportEl;
   }
 
@@ -497,7 +510,7 @@ export class GalleryRenderer extends MarkdownRenderChild {
   private createCaption(): HTMLElement {
     const captionEl = document.createElement("div");
     captionEl.className = "og-gallery__caption";
-    this.setAccessibleTooltip(captionEl, "gallery caption");
+    this.setAccessibleTooltip(captionEl, "caption");
     this.captionEl = captionEl;
 
     const contentEl = document.createElement("div");
@@ -508,9 +521,10 @@ export class GalleryRenderer extends MarkdownRenderChild {
     const openButtonEl = document.createElement("button");
     openButtonEl.type = "button";
     openButtonEl.className = "og-gallery__caption-open";
-    this.setButtonLabel(openButtonEl, "caption");
+    this.setButtonLabel(openButtonEl, "caption note");
     setIcon(openButtonEl, "file-text");
     this.captionOpenButtonEl = openButtonEl;
+    const resizeHandleEl = this.createResizeHandle("caption_height");
 
     this.registerDomEvent(contentEl, "click", (event: MouseEvent) => {
       const target = event.target;
@@ -535,8 +549,88 @@ export class GalleryRenderer extends MarkdownRenderChild {
       void this.openCurrentCaption();
     });
 
-    captionEl.append(contentEl, openButtonEl);
+    captionEl.append(contentEl, openButtonEl, resizeHandleEl);
     return captionEl;
+  }
+
+  private createResizeHandle(option: GallerySizeOption): HTMLElement {
+    const handleEl = document.createElement("div");
+    handleEl.className = `og-gallery__resize-handle og-gallery__resize-handle--${option === "view_height" ? "view" : "caption"}`;
+    handleEl.setAttribute("role", "separator");
+    handleEl.setAttribute("aria-orientation", "horizontal");
+
+    this.registerDomEvent(handleEl, "pointerdown", (event: PointerEvent) => this.startResize(option, handleEl, event));
+    this.registerDomEvent(handleEl, "pointermove", (event: PointerEvent) => this.updateResize(event));
+    this.registerDomEvent(handleEl, "pointerup", (event: PointerEvent) => this.finishResize(event, true));
+    this.registerDomEvent(handleEl, "pointercancel", (event: PointerEvent) => this.finishResize(event, false));
+
+    return handleEl;
+  }
+
+  private startResize(option: GallerySizeOption, handleEl: HTMLElement, event: PointerEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const startHeight = option === "view_height" ? this.config.viewHeight : this.config.captionHeight;
+    this.resizeState = {
+      option,
+      pointerId: event.pointerId,
+      handleEl,
+      startY: event.clientY,
+      startHeight,
+    };
+    this.rootEl?.classList.add("is-resizing");
+    handleEl.setPointerCapture(event.pointerId);
+  }
+
+  private updateResize(event: PointerEvent): void {
+    if (!this.resizeState || event.pointerId !== this.resizeState.pointerId) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const deltaY = event.clientY - this.resizeState.startY;
+    const nextHeight = this.resizeState.option === "view_height"
+      ? this.resizeState.startHeight - deltaY
+      : this.resizeState.startHeight + deltaY;
+    this.applyGallerySize(this.resizeState.option, nextHeight);
+  }
+
+  private finishResize(event: PointerEvent, persist: boolean): void {
+    if (!this.resizeState || event.pointerId !== this.resizeState.pointerId) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const { option, handleEl } = this.resizeState;
+    const nextValue = option === "view_height" ? this.config.viewHeight : this.config.captionHeight;
+    if (handleEl.hasPointerCapture(event.pointerId)) {
+      handleEl.releasePointerCapture(event.pointerId);
+    }
+
+    this.resizeState = null;
+    this.rootEl?.classList.remove("is-resizing");
+    if (persist) {
+      void this.saveSizeOption?.(option, nextValue);
+    }
+  }
+
+  private applyGallerySize(option: GallerySizeOption, value: number): void {
+    const min = option === "view_height" ? MIN_VIEW_HEIGHT : MIN_CAPTION_HEIGHT;
+    const nextValue = Math.round(clamp(value, min, MAX_GALLERY_SIZE));
+    if (option === "view_height") {
+      this.config.viewHeight = nextValue;
+      this.rootEl?.style.setProperty("--og-view-height", `${nextValue}px`);
+      this.applyRotation(this.currentRotation);
+      return;
+    }
+
+    this.config.captionHeight = nextValue;
+    this.rootEl?.style.setProperty("--og-caption-height", `${nextValue}px`);
   }
 
   private setInputActive(active: boolean): void {
@@ -670,7 +764,7 @@ export class GalleryRenderer extends MarkdownRenderChild {
       this.mediaEl.alt = item.name;
     } else if (this.mediaEl instanceof HTMLVideoElement) {
       this.mediaEl.src = resourcePath;
-      this.mediaEl.setAttribute("aria-label", item.name);
+      this.mediaEl.removeAttribute("aria-label");
       this.mediaEl.load();
     }
 

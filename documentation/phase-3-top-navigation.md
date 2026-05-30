@@ -29,11 +29,13 @@ Preview thumbnails are rendered as square buttons with the same visual scale as 
 
 Image and video thumbnails reuse Obsidian resource URLs through the same `getResourcePath()` adapter as the main viewport. Video thumbnails render a metadata-preloaded `<video>` preview with a centered play marker.
 
-## Tooltip Lifetime
+## Tooltip Policy
 
-Obsidian shows tooltips from control labels. Gallery controls and labeled gallery regions keep their accessible label at rest, but while hovered or focused the label is removed after `5` seconds and restored on mouse leave or blur. This prevents persistent tooltips from covering media and captions during inspection.
+Obsidian shows tooltips from control labels. Button controls keep their accessible label at rest, but while hovered or focused the label is removed after `5` seconds and restored on mouse leave or blur. This prevents persistent tooltips from covering media and captions during inspection.
 
 `src/render/autoHidingTooltip.ts` owns this lifecycle so every tooltip-like label follows the same timeout and cleanup path. The renderer also registers Obsidian-native tooltips with the `og-gallery__tooltip` class; CSS fades that tooltip popover after the same `5` second lifetime, and the timeout removes matching visible tooltip nodes as a fallback for already-open popovers.
+
+The media viewport and top navigation do not register Obsidian tooltips. Preview thumbnails, dots, and the rail do not set tooltip-like labels, so hovering the navigation does not show `item X` or position labels over the media.
 
 ## Rotation and View Modes
 

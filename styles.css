@@ -39,7 +39,7 @@
 .og-gallery__nav {
   position: absolute;
   z-index: 2;
-  top: 8px;
+  top: 6px;
   left: 50%;
   display: flex;
   max-width: calc(100% - 96px);
@@ -275,6 +275,30 @@
   overflow: hidden;
   background: var(--background-secondary);
   outline: none;
+}
+
+.og-gallery__resize-handle {
+  position: absolute;
+  z-index: 3;
+  right: 0;
+  left: 0;
+  height: 6px;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.og-gallery__resize-handle--view {
+  top: 0;
+}
+
+.og-gallery__resize-handle--caption {
+  bottom: 0;
+}
+
+.og-gallery.is-resizing,
+.og-gallery.is-resizing * {
+  cursor: ns-resize !important;
+  user-select: none;
 }
 
 .og-gallery__viewport:focus-visible {
