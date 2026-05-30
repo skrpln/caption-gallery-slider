@@ -2,7 +2,7 @@
 
 ## Phase 4 — Video
 
-Текущий статус: Phase 4 закрыта и принята оператором. Код собран, установлен в vault, протестирован unit-тестами и ручной проверкой.
+Текущий статус: Phase 4 закрыта и принята оператором. После закрытия выполнена дополнительная UI-полировка размера виджета и tooltip behavior; код собран, установлен в vault, протестирован unit-тестами и ручной проверкой.
 
 Сделано:
 - Видео-форматы `mp4`, `avi`, `mov`, `webm` включены в общий media resolver вместе с изображениями.
@@ -19,6 +19,14 @@
 - Проверки пройдены: `npm test` — 44 теста, `npm run build` — успешно, `git diff --check` — без замечаний.
 - Собранный плагин обновлён в `/Users/nikita/Documents/Test Vault/.obsidian/plugins/obsidian-gallery`.
 - Ручная приемка оператором успешна: проверены `mp4` и `mov`, video controls, preview thumbnails, progress rail, click-to-play и responsive перенос controls.
+- Добавлены resize-зоны для настройки размера виджета: верхняя граница viewport сохраняет `view_height`, нижняя граница caption panel сохраняет `caption_height`.
+- Добавлен pure-helper `src/parser/galleryBlockEditor.ts` для обновления size-параметров в исходном `gallery` code block и unit-тесты для него.
+- Ряд preview thumbnails поднят до горизонтали верхней границы кнопок `fullscreen` и `</>`.
+- Убраны tooltip-подписи с viewport, video media, preview thumbnails, dots и верхнего rail; caption tooltips переименованы в `caption` и `caption note`.
+- Добавлена документация [[documentation/widget-size-controls]]; обновлены [[documentation/_MOC]] и [[documentation/phase-3-top-navigation]].
+- Проверки последней сессии пройдены: `npm test` — 49 тестов, `npm run build` — успешно, `git diff --check` — без замечаний.
+- Собранный плагин повторно обновлён в `/Users/nikita/Documents/Test Vault/.obsidian/plugins/obsidian-gallery`.
+- Ручная приемка оператором успешна: сессия настройки размеров и tooltip polish признана результативной.
 
 Осталось:
 - Перейти к Phase 5 Grid and Fullscreen.
@@ -118,6 +126,10 @@
 # Log
 
 ## Phase 4 — Video
+
+### 2026-05-31 00:17 — Widget Size and Tooltip Polish
+
+Сессия завершена результативно: добавлены resize-зоны для `view_height` и `caption_height`, убраны лишние tooltip-подписи с viewport и верхней навигации, обновлены документация и установленная сборка. Подробности: [[log/2026-05-31_00-17_widget-size-tooltip-polish]].
 
 ### 2026-05-29 01:00 — Phase 4 Video
 

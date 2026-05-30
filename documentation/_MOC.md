@@ -9,6 +9,7 @@ Project links: [[expectation]], [[plan]], [[progress_log]]
 - [[documentation/phase-2-captions]] — caption settings, deterministic caption paths, caption panel layout, and Phase 2 test coverage.
 - [[documentation/phase-3-top-navigation]] — preview thumbnails, adaptive plain navigation, tooltip lifetime, and rotated crop behavior.
 - [[documentation/phase-4-video]] — video media resolution, custom playback controls, and caption frontmatter playback state.
+- [[documentation/widget-size-controls]] — direct resize handles for `view_height` and `caption_height`, source updates, and tooltip policy.
 - [[documentation/caption-rendering-case-study]] — article-ready note about caption Markdown rendering pitfalls, whitespace modes, and the final compact preview solution.
 - [[documentation/keyboard-navigation-backlog]] — deferred keyboard arrow navigation investigation, tested approaches, and Phase 6 acceptance criteria.
 
