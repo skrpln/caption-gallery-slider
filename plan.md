@@ -270,7 +270,7 @@ Scope:
   - aria-labels;
   - focus states;
   - keyboard navigation.
-  - Revisit deferred gallery keyboard arrow navigation. Summary: Phase 1 tested focused viewport `keydown`, `document` listener, `window` capture listener, and Obsidian `Scope`; none behaved reliably in the current Reading/Live Preview renderer context. Full notes: [[documentation/keyboard-navigation-backlog]].
+  - Keyboard arrow navigation now uses a plugin-level active gallery target. Keep regression checks in Reading mode, Live Preview, fullscreen, and caption editing. Full notes: [[documentation/keyboard-navigation-backlog]].
 - Performance pass:
   - проверка галерей 100+ элементов;
   - lazy loading;
@@ -284,6 +284,28 @@ Scope:
 - Плагин можно установить вручную в vault.
 - Пользователь может создать галерею по README без чтения исходников.
 - Нет известных blocking issues для публикации.
+
+## Feature Backlog — Remote Media Sources
+
+Цель: добавить поддержку явных remote media entries в `list`: прямые ссылки на изображения, прямые ссылки на видео, YouTube links и будущие allowlisted provider embeds.
+
+Архитектурное описание: [[documentation/remote-media-sources]].
+
+Scope:
+- расширить `GalleryItem` до union-модели для vault, remote и embed sources;
+- добавить pure helpers для HTTP URL, YouTube ID, embed URL, thumbnail URL и content-type mapping;
+- добавить async remote resolver с cache, timeout и fallback `HEAD` -> `GET`;
+- сделать `resolveGalleryMedia()` async или добавить async wrapper;
+- рендерить remote images через `<img>`, remote videos через `<video>`, YouTube через allowlisted `<iframe>`;
+- считать caption path hash от нормализованного URL или provider canonical URL;
+- явно задокументировать, что remote media делает сетевые запросы при рендере заметки.
+
+Критерии приемки:
+- `list` принимает vault paths и remote URLs в одном порядке;
+- YouTube `watch` и `youtu.be` ссылки рендерятся iframe embed;
+- прямые remote image/video URLs рендерятся без копирования в vault;
+- unsupported URLs показывают inline state и не ломают галерею;
+- captions работают для remote media так же лениво, как для vault media.
 
 ## Текущие архитектурные рекомендации
 

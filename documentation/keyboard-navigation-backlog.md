@@ -1,110 +1,62 @@
-# Keyboard Navigation Backlog
+# Keyboard Navigation
 
 Related notes: [[plan]], [[documentation/phase-1-mvp]], [[documentation/architecture]], [[progress_log]]
 
 ## Status
 
-Keyboard navigation with `ArrowLeft` and `ArrowRight` is deferred to Phase 6 accessibility work.
+Keyboard navigation with `ArrowLeft` and `ArrowRight` is implemented through a plugin-level active gallery target.
 
-The feature is desirable but not blocking for Phase 1 polishing. Buttons, dots, swipe gestures, wheel/trackpad navigation, and fullscreen are enough for the current accepted slider experience.
+The behavior is scoped to the gallery widget:
 
-## Expected Behavior
+- `ArrowRight` switches to the next media item;
+- `ArrowLeft` switches to the previous media item;
+- arrows work after pointer interaction inside the widget;
+- arrows work while the pointer is inside any part of the widget, including viewport, navigation controls, video controls, and caption shell;
+- arrows work while the widget root is fullscreen;
+- clicking outside the widget disables the active state unless the widget is fullscreen;
+- arrows are not captured while the caption body is being edited.
 
-After the user clicks inside the gallery viewport:
+## Implementation
 
-- `ArrowRight` should switch to the next image;
-- `ArrowLeft` should switch to the previous image;
-- navigation should remain scoped to the active gallery;
-- clicking outside the gallery should disable the gallery key handling;
-- future caption editors must keep normal arrow behavior for cursor movement.
+The renderer does not own global keyboard listeners. It only exposes the `GalleryKeyboardTarget` contract from `src/render/keyboardNavigation.ts`:
 
-## Tested Approaches
+- `canHandleKeyboard()` returns whether this gallery can currently consume arrow keys;
+- `nextFromKeyboard()` moves to the next item;
+- `previousFromKeyboard()` moves to the previous item.
 
-### Focused viewport DOM listener
+`src/main.ts` owns the active target:
 
-Implementation idea:
+- `activeGallery` stores the latest renderer that reported pointer or focus activity;
+- one plugin-level `document` `keydown` listener handles `ArrowLeft` and `ArrowRight`;
+- the listener asks `activeGallery.canHandleKeyboard()` before preventing default behavior;
+- if the active renderer is stale or inactive, the listener clears `activeGallery`.
 
-- make `.og-gallery__viewport` focusable with `tabIndex = 0`;
-- call `viewportEl.focus()` after click/pointer interaction;
-- listen for `keydown` on the viewport;
-- ignore editable descendants with `input`, `textarea`, `select`, and `contenteditable` checks.
+This follows the working model used by Media Slider: one active slider is stored at plugin level, and keyboard routing is centralized instead of distributed across renderer instances.
 
-Result:
+## Renderer Activation
 
-- did not trigger reliably in Obsidian after clicking the rendered code block;
-- likely reason: focus remains owned by Obsidian Reading/Live Preview/editor infrastructure, or keyboard events are handled before reaching the custom DOM node.
+`GalleryRenderer` calls `activateKeyboardTarget(this)` on:
 
-### Document-level DOM listener
+- `focusin` inside the widget;
+- `pointerenter` and `pointerover` on the root widget;
+- `pointerdown` on the root widget;
+- pointer interaction inside the viewport;
+- entering fullscreen.
 
-Implementation idea:
+The active area is the whole widget, not only the viewport. This keeps arrow navigation active when the pointer is over previous/next buttons, top navigation, video controls, or the demonstration area.
 
-- register `keydown` on `document`;
-- keep an internal boolean that marks the gallery as active after a click inside its root;
-- call `preventDefault()` for `ArrowLeft` and `ArrowRight`;
-- disable the flag after pointer interaction outside the gallery.
+## Cleanup
 
-Result:
+The plugin-level listener is registered through Obsidian `Plugin.registerDomEvent()`, so it is removed when the plugin unloads.
 
-- still did not work reliably during manual testing;
-- likely reason: Obsidian's active editor/view key handling can consume or redirect arrow-key behavior before the plugin's document listener handles it in the expected context.
+The active target is safe to keep as a reference because `canHandleKeyboard()` checks that the renderer root is still connected. If the renderer was unloaded, the next keydown clears the stale target.
 
-### Window capture listener
+## Tests
 
-Implementation idea:
+Unit coverage lives in `src/render/keyboardNavigation.test.ts` and verifies:
 
-- register `keydown` on `window` with `{ capture: true }`;
-- activate it only after clicking inside the gallery;
-- stop propagation and prevent default for arrow keys.
-
-Result:
-
-- did not solve the issue in the tested Obsidian context;
-- this approach is also more invasive because it observes global keydown events and may conflict with Obsidian scopes or other plugins if not handled very carefully.
-
-### Obsidian `Scope`
-
-Implementation idea:
-
-- create `new Scope(app.scope)`;
-- register `ArrowLeft` and `ArrowRight` with `scope.register([], key, handler)`;
-- call `app.keymap.pushScope(scope)` when the gallery becomes active;
-- call `app.keymap.popScope(scope)` when focus leaves the gallery or the renderer unloads.
-
-Result:
-
-- compiled successfully and matches Obsidian's public keymap API;
-- manual testing still did not produce reliable arrow navigation in the current renderer context;
-- the temporary implementation was removed from runtime to avoid false behavior and possible interference with Obsidian keymap handling.
-
-## Current Decision
-
-Do not ship keyboard arrow navigation in Phase 1.
-
-The Phase 1 renderer keeps:
-
-- click navigation through the bottom previous/next strip;
-- dots navigation;
-- horizontal wheel/trackpad navigation after gallery activation;
-- pointer swipe gestures;
-- fullscreen toggle.
-
-Keyboard arrows remain a backlog item for the Phase 6 accessibility pass.
-
-## Recommended Next Investigation
-
-For Phase 6:
-
-- test in both Reading mode and Live Preview separately;
-- check whether `ctx` or surrounding markdown view exposes a view/component scope that should be used instead of `app.scope`;
-- test Obsidian `Scope` behavior in a minimal plugin command/view before reintroducing it into the gallery renderer;
-- inspect whether CodeMirror active editor focus in Live Preview consumes arrow keys before plugin scopes;
-- add a small debug-only notice/log path that confirms whether `Scope.register()` handlers fire;
-- consider using explicit focusable controls or a dedicated active-view mechanism if global scopes remain unreliable.
-
-## Acceptance Criteria For Revisit
-
-- arrow navigation works after clicking the gallery in Reading mode;
-- arrow navigation works after clicking the gallery in Live Preview;
-- clicking outside the gallery restores normal Obsidian arrow behavior;
-- arrow keys do not navigate the gallery while editing future caption text;
-- cleanup removes all key handlers/scopes when the markdown block unloads.
+- active widgets capture arrows;
+- hovered widgets capture arrows;
+- fullscreen widgets capture arrows without prior activation;
+- modified arrows are ignored;
+- text editing keeps normal arrow behavior.

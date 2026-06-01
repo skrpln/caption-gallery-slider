@@ -1,5 +1,30 @@
 # Progress
 
+## Phase 5 — Grid and Fullscreen
+
+Текущий статус: Phase 5 начата с hardening keyboard navigation перед grid/fullscreen работами. Keyboard navigation стрелками принята оператором после перехода на plugin-level active gallery target. Remote media sources вынесены в отдельный backlog-дизайн для будущей реализации.
+
+Сделано:
+- Изучен Media Slider как референс для keyboard navigation в Obsidian.
+- Удалена хрупкая renderer-local схема keyboard handling через `Scope`, window/document capture и принудительный DOM focus.
+- Добавлен plugin-level active gallery target:
+  - `src/main.ts` хранит активную галерею и владеет единым `document` `keydown` handler;
+  - `src/render/GalleryRenderer.ts` сообщает активность через `activateKeyboardTarget(this)`;
+  - активная зона — весь widget root, включая viewport, top navigation, стрелки, video controls и caption shell;
+  - caption editing блокирует перехват стрелок;
+  - fullscreen продолжает принимать стрелки через `canHandleKeyboard()`.
+- Добавлен pure contract/helper `src/render/keyboardNavigation.ts` и unit-тесты `src/render/keyboardNavigation.test.ts`.
+- Обновлена документация [[documentation/keyboard-navigation-backlog]].
+- Добавлена архитектурная backlog-заметка [[documentation/remote-media-sources]] для будущей поддержки прямых remote image/video URLs, YouTube links и allowlisted embeds.
+- Обновлены [[documentation/_MOC]] и [[plan]].
+- Проверки пройдены: `npm test` — 54 теста, `npm run build` — успешно, `git diff --check` — без замечаний.
+- Собранный плагин обновлён в `/Users/nikita/Documents/Test Vault/.obsidian/plugins/obsidian-gallery`.
+- Ручная приемка оператором успешна: keyboard navigation работает корректно после hover и click.
+
+Осталось:
+- Продолжить Phase 5 Grid and Fullscreen: `grid`, paging группами, group captions, click-to-caption и fullscreen polish.
+- Remote media sources реализовывать позднее по [[documentation/remote-media-sources]].
+
 ## Phase 4 — Video
 
 Текущий статус: Phase 4 закрыта и принята оператором. После закрытия выполнена дополнительная UI-полировка размера виджета и tooltip behavior; код собран, установлен в vault, протестирован unit-тестами и ручной проверкой.
@@ -124,6 +149,12 @@
 - Нужно ли для `sort: created|modified` сортировать по возрастанию или удобнее по убыванию для пользовательских галерей?
 
 # Log
+
+## Phase 5 — Grid and Fullscreen
+
+### 2026-06-02 05:16 — Keyboard Navigation and Remote Sources Backlog
+
+Сессия завершена результативно: keyboard navigation переведена на plugin-level active gallery target и принята оператором; remote image/video URLs и YouTube embeds вынесены в отдельную архитектурную backlog-заметку. Подробности: [[log/2026-06-02_05-16_keyboard-navigation-remote-backlog]].
 
 ## Phase 4 — Video
 
