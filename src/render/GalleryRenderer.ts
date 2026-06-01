@@ -1,4 +1,4 @@
-// Documentation: [[documentation/architecture]], [[documentation/phase-4-video]], [[documentation/widget-size-controls]]
+// Documentation: [[documentation/architecture]], [[documentation/phase-4-video]], [[documentation/widget-size-controls]], [[documentation/keyboard-navigation-backlog]]
 
 import { MarkdownRenderChild, setIcon, setTooltip } from "obsidian";
 import type { GalleryConfig } from "../parser/galleryBlockParser";
@@ -17,6 +17,7 @@ import {
   registerAutoHidingTooltip,
   setTooltipLabel,
 } from "./autoHidingTooltip";
+import type { GalleryKeyboardTarget } from "./keyboardNavigation";
 
 export interface GalleryRendererOptions {
   config: GalleryConfig;
@@ -34,6 +35,7 @@ export interface GalleryRendererOptions {
     sourcePath: string,
     component: MarkdownRenderChild,
   ): Promise<void>;
+  activateKeyboardTarget?(target: GalleryKeyboardTarget): void;
 }
 
 interface GalleryResizeState {
@@ -48,7 +50,7 @@ const MIN_VIEW_HEIGHT = 120;
 const MIN_CAPTION_HEIGHT = 28;
 const MAX_GALLERY_SIZE = 1400;
 
-export class GalleryRenderer extends MarkdownRenderChild {
+export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeyboardTarget {
   private readonly config: GalleryConfig;
   private readonly items: GalleryItem[];
   private readonly getResourcePath: (path: string) => string | null;
@@ -59,6 +61,7 @@ export class GalleryRenderer extends MarkdownRenderChild {
   private readonly openCaption: ((item: GalleryItem) => Promise<void>) | null;
   private readonly saveSizeOption: ((option: GallerySizeOption, value: number) => Promise<void>) | null;
   private readonly renderCaptionMarkdown: GalleryRendererOptions["renderCaptionMarkdown"] | null;
+  private readonly activateKeyboardTarget: ((target: GalleryKeyboardTarget) => void) | null;
   private state: GalleryState;
   private rootEl: HTMLElement | null = null;
   private viewportEl: HTMLElement | null = null;
@@ -88,6 +91,7 @@ export class GalleryRenderer extends MarkdownRenderChild {
   private currentRotation = 0;
   private currentPlayback: CaptionVideoPlayback = DEFAULT_VIDEO_PLAYBACK;
   private inputActive = false;
+  private pointerInside = false;
   private captionEditing = false;
   private captionRenderToken = 0;
   private captionSaveToken = 0;
@@ -105,6 +109,7 @@ export class GalleryRenderer extends MarkdownRenderChild {
     this.openCaption = options.openCaption ?? null;
     this.saveSizeOption = options.saveSizeOption ?? null;
     this.renderCaptionMarkdown = options.renderCaptionMarkdown ?? null;
+    this.activateKeyboardTarget = options.activateKeyboardTarget ?? null;
     this.state = createGalleryState(options.items.length);
   }
 
@@ -121,6 +126,7 @@ export class GalleryRenderer extends MarkdownRenderChild {
     root.style.setProperty("--og-caption-height", `${this.config.captionHeight}px`);
     this.rootEl = root;
     this.containerEl.appendChild(root);
+    this.registerRootActivation(root);
 
     if (this.items.length === 0) {
       root.appendChild(createMessage("No supported media files found."));
@@ -138,6 +144,66 @@ export class GalleryRenderer extends MarkdownRenderChild {
       root.appendChild(captionEl);
     }
     this.updateView();
+  }
+
+  private registerRootActivation(root: HTMLElement): void {
+    this.registerDomEvent(root, "focusin", () => {
+      this.setInputActive(true);
+      this.activateKeyboardTarget?.(this);
+    });
+
+    this.registerDomEvent(root, "pointerenter", () => {
+      this.pointerInside = true;
+      this.activateKeyboardTarget?.(this);
+    });
+
+    this.registerDomEvent(root, "pointerover", () => {
+      this.pointerInside = true;
+      this.activateKeyboardTarget?.(this);
+    });
+
+    this.registerDomEvent(root, "pointerleave", () => {
+      this.pointerInside = false;
+    });
+
+    this.registerDomEvent(root, "pointerdown", () => {
+      this.setInputActive(true);
+      this.activateKeyboardTarget?.(this);
+    });
+
+    this.registerDomEvent(document, "pointerdown", (event: PointerEvent) => {
+      if (!(event.target instanceof Node)) {
+        return;
+      }
+
+      const inside = root.contains(event.target);
+      this.pointerInside = inside;
+      this.setInputActive(inside);
+    });
+  }
+
+  canHandleKeyboard(): boolean {
+    return Boolean(this.rootEl?.isConnected)
+      && this.items.length > 0
+      && !this.captionEditing
+      && (this.inputActive || this.pointerInside || this.isRootFullscreen());
+  }
+
+  nextFromKeyboard(): void {
+    this.next();
+  }
+
+  previousFromKeyboard(): void {
+    this.previous();
+  }
+
+  private isRootFullscreen(): boolean {
+    if (!this.rootEl) {
+      return false;
+    }
+
+    const fullscreenElement = document.fullscreenElement;
+    return fullscreenElement === this.rootEl || Boolean(fullscreenElement && this.rootEl.contains(fullscreenElement));
   }
 
   private createFullscreenButton(): HTMLButtonElement {
@@ -307,12 +373,16 @@ export class GalleryRenderer extends MarkdownRenderChild {
     const resizeHandleEl = this.createResizeHandle("view_height");
 
     this.registerDomEvent(viewportEl, "pointerdown", (event: PointerEvent) => {
+      this.pointerInside = true;
       this.setInputActive(true);
+      this.activateKeyboardTarget?.(this);
       this.pointerStartX = event.clientX;
     });
 
     this.registerDomEvent(viewportEl, "click", (event: MouseEvent) => {
+      this.pointerInside = true;
       this.setInputActive(true);
+      this.activateKeyboardTarget?.(this);
       if (event.target instanceof HTMLElement && event.target.closest(
         "button, .og-gallery__video-controls, .og-gallery__nav",
       )) {
@@ -325,12 +395,19 @@ export class GalleryRenderer extends MarkdownRenderChild {
       }
     });
 
-    this.registerDomEvent(document, "pointerdown", (event: PointerEvent) => {
-      if (!this.viewportEl || !(event.target instanceof Node)) {
-        return;
-      }
+    this.registerDomEvent(viewportEl, "pointermove", () => {
+      this.pointerInside = true;
+      this.activateKeyboardTarget?.(this);
+    });
 
-      this.setInputActive(this.viewportEl.contains(event.target));
+    this.registerDomEvent(viewportEl, "pointerover", () => {
+      this.pointerInside = true;
+      this.activateKeyboardTarget?.(this);
+    });
+
+    this.registerDomEvent(viewportEl, "pointerenter", () => {
+      this.pointerInside = true;
+      this.activateKeyboardTarget?.(this);
     });
 
     this.registerDomEvent(viewportEl, "wheel", (event: WheelEvent) => {
@@ -634,17 +711,7 @@ export class GalleryRenderer extends MarkdownRenderChild {
   }
 
   private setInputActive(active: boolean): void {
-    if (this.inputActive === active) {
-      if (active) {
-        this.viewportEl?.focus({ preventScroll: true });
-      }
-      return;
-    }
-
     this.inputActive = active;
-    if (active) {
-      this.viewportEl?.focus({ preventScroll: true });
-    }
   }
 
   private async toggleFullscreen(): Promise<void> {
@@ -660,6 +727,7 @@ export class GalleryRenderer extends MarkdownRenderChild {
 
       await this.rootEl.requestFullscreen();
       this.setInputActive(true);
+      this.activateKeyboardTarget?.(this);
     } catch {
       // Fullscreen can be blocked by the host app or OS permissions.
     }

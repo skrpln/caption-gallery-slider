@@ -11,7 +11,8 @@ Project links: [[expectation]], [[plan]], [[progress_log]]
 - [[documentation/phase-4-video]] — video media resolution, custom playback controls, and caption frontmatter playback state.
 - [[documentation/widget-size-controls]] — direct resize handles for `view_height` and `caption_height`, source updates, and tooltip policy.
 - [[documentation/caption-rendering-case-study]] — article-ready note about caption Markdown rendering pitfalls, whitespace modes, and the final compact preview solution.
-- [[documentation/keyboard-navigation-backlog]] — deferred keyboard arrow navigation investigation, tested approaches, and Phase 6 acceptance criteria.
+- [[documentation/keyboard-navigation-backlog]] — implemented keyboard arrow navigation scope, fullscreen behavior, cleanup, and tests.
+- [[documentation/remote-media-sources]] — backlog architecture for direct remote image/video URLs and YouTube embeds.
 
 ## Planning
 

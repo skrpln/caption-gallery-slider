@@ -1,4 +1,4 @@
-// Documentation: [[documentation/architecture]], [[documentation/widget-size-controls]]
+// Documentation: [[documentation/architecture]], [[documentation/widget-size-controls]], [[documentation/keyboard-navigation-backlog]]
 
 import { Notice, Plugin, TFile, type App, type Editor, type MarkdownPostProcessorContext, type MarkdownSectionInformation } from "obsidian";
 import { createObsidianVaultAdapter, getObsidianResourcePath } from "./media/obsidianVaultAdapter";
@@ -10,16 +10,19 @@ import { renderCaptionMarkdown } from "./captions/captionMarkdownRenderer";
 import { ObsidianCaptionService } from "./captions/obsidianCaptionService";
 import { ObsidianGallerySettingTab } from "./settings/ObsidianGallerySettingTab";
 import { DEFAULT_SETTINGS, type ObsidianGallerySettings } from "./settings/settings";
+import { getGalleryKeyboardDirection, type GalleryKeyboardTarget } from "./render/keyboardNavigation";
 
 const HOVER_SOURCE_ID = "obsidian-gallery-caption";
 
 export default class ObsidianGalleryPlugin extends Plugin {
   settings: ObsidianGallerySettings = DEFAULT_SETTINGS;
+  private activeGallery: GalleryKeyboardTarget | null = null;
 
   async onload(): Promise<void> {
     await this.loadSettings();
     this.addSettingTab(new ObsidianGallerySettingTab(this.app, this));
     this.registerCaptionHoverSource();
+    this.registerGalleryKeyboardNavigation();
     const captionService = new ObsidianCaptionService(this.app, () => this.settings.gallerySaveDir);
 
     this.registerMarkdownCodeBlockProcessor("gallery", (source, el, ctx) => {
@@ -56,6 +59,9 @@ export default class ObsidianGalleryPlugin extends Plugin {
         },
         renderCaptionMarkdown: (markdown, containerEl, sourcePath, component) =>
           renderCaptionMarkdown(this.app, markdown, containerEl, sourcePath, component, HOVER_SOURCE_ID),
+        activateKeyboardTarget: (target) => {
+          this.activeGallery = target;
+        },
       });
 
       ctx.addChild(renderer);
@@ -84,6 +90,37 @@ export default class ObsidianGalleryPlugin extends Plugin {
     pluginWithHoverSource.registerHoverLinkSource?.(HOVER_SOURCE_ID, {
       display: "Obsidian Gallery Caption",
       defaultMod: true,
+    });
+  }
+
+  private registerGalleryKeyboardNavigation(): void {
+    this.registerDomEvent(document, "keydown", (event: KeyboardEvent) => {
+      const target = this.activeGallery;
+      if (!target) {
+        return;
+      }
+
+      if (!target.canHandleKeyboard()) {
+        this.activeGallery = null;
+        return;
+      }
+
+      const direction = getGalleryKeyboardDirection(event, {
+        inputActive: true,
+        pointerInside: false,
+        fullscreen: false,
+      }, false);
+      if (!direction) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (direction === "previous") {
+        target.previousFromKeyboard();
+      } else {
+        target.nextFromKeyboard();
+      }
     });
   }
 }
