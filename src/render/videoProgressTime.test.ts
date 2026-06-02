@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { formatVideoProgressTime, videoProgressPointerTime } from "./videoProgressTime";
+import {
+  clampVideoRangeEdge,
+  formatVideoProgressTime,
+  normalizeVideoTimeRange,
+  videoProgressPointerTime,
+  videoTimeToProgress,
+} from "./videoProgressTime";
 
 describe("video progress time", () => {
   it("formats seconds as mm:ss", () => {
@@ -23,5 +29,24 @@ describe("video progress time", () => {
   it("returns zero when duration or rail width is unavailable", () => {
     expect(videoProgressPointerTime(150, 100, 0, 120)).toBe(0);
     expect(videoProgressPointerTime(150, 100, 200, Number.NaN)).toBe(0);
+  });
+
+  it("normalizes optional playback range values", () => {
+    expect(normalizeVideoTimeRange(120, null, null)).toEqual({ start: 0, end: 120 });
+    expect(normalizeVideoTimeRange(120, 10, 40)).toEqual({ start: 10, end: 40 });
+    expect(normalizeVideoTimeRange(120, -10, 200)).toEqual({ start: 0, end: 120 });
+  });
+
+  it("keeps range edges from crossing", () => {
+    const range = { start: 10, end: 20 };
+
+    expect(clampVideoRangeEdge("start", 30, range, 120)).toBe(19.75);
+    expect(clampVideoRangeEdge("end", 5, range, 120)).toBe(10.25);
+  });
+
+  it("maps absolute time to rail progress", () => {
+    expect(videoTimeToProgress(30, 120)).toBe(0.25);
+    expect(videoTimeToProgress(-10, 120)).toBe(0);
+    expect(videoTimeToProgress(140, 120)).toBe(1);
   });
 });

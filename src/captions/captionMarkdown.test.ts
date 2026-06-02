@@ -46,9 +46,9 @@ describe("createCaptionMarkdown", () => {
         target: "vid",
         sourcePath: "Attachments/clip.mp4",
         body: "",
-        playback: { autoplay: false, muted: true, loop: true },
+        playback: { autoplay: false, muted: true, loop: true, start: 12, end: 42.5 },
       }),
-    ).toBe('---\ngallery_id: "vacation"\ntarget: "vid"\nsource_path: "Attachments/clip.mp4"\nrotation: 0\nautoplay: false\nmuted: true\nloop: true\n---\n');
+    ).toBe('---\ngallery_id: "vacation"\ntarget: "vid"\nsource_path: "Attachments/clip.mp4"\nrotation: 0\nautoplay: false\nmuted: true\nloop: true\nstart: 12\nend: 42.5\n---\n');
   });
 });
 
@@ -67,16 +67,27 @@ describe("caption frontmatter numbers", () => {
 
 describe("caption frontmatter booleans", () => {
   it("reads and updates playback flags", () => {
-    const frontmatter = "autoplay: true\nmuted: false\nloop: true";
+    const frontmatter = "autoplay: true\nmuted: false\nloop: true\nstart: 12.5\nend: 42";
 
     expect(readFrontmatterBoolean(frontmatter, "autoplay", false)).toBe(true);
-    expect(readVideoPlayback(frontmatter)).toEqual({ autoplay: true, muted: false, loop: true });
+    expect(readVideoPlayback(frontmatter)).toEqual({
+      autoplay: true,
+      muted: false,
+      loop: true,
+      start: 12.5,
+      end: 42,
+    });
     expect(upsertFrontmatterBoolean("muted: false", "muted", true)).toBe("muted: true");
     expect(upsertFrontmatterBoolean("gallery_id: test", "loop", true)).toBe("gallery_id: test\nloop: true");
   });
 
   it("upserts all video playback flags", () => {
-    expect(upsertVideoPlayback("gallery_id: test", { autoplay: true, muted: true, loop: false }))
-      .toBe("gallery_id: test\nautoplay: true\nmuted: true\nloop: false");
+    expect(upsertVideoPlayback("gallery_id: test", {
+      autoplay: true,
+      muted: true,
+      loop: false,
+      start: 3.25,
+      end: 8,
+    })).toBe("gallery_id: test\nautoplay: true\nmuted: true\nloop: false\nstart: 3.25\nend: 8");
   });
 });

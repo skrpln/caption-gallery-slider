@@ -2,7 +2,7 @@
 
 ## Phase 5 — Grid and Fullscreen
 
-Текущий статус: Phase 5 начата с hardening keyboard navigation перед grid/fullscreen работами. Keyboard navigation стрелками принята оператором после перехода на plugin-level active gallery target. Remote media sources вынесены в отдельный backlog-дизайн для будущей реализации.
+Текущий статус: Phase 5 начата с hardening keyboard navigation перед grid/fullscreen работами. Keyboard navigation стрелками принята оператором после перехода на plugin-level active gallery target. Дополнительно принят video fragment range: time-tooltip, `start`/`end` в caption frontmatter, drag handles и loop выбранного фрагмента. Remote media sources вынесены в отдельный backlog-дизайн для будущей реализации.
 
 Сделано:
 - Изучен Media Slider как референс для keyboard navigation в Obsidian.
@@ -20,6 +20,17 @@
 - Проверки пройдены: `npm test` — 54 теста, `npm run build` — успешно, `git diff --check` — без замечаний.
 - Собранный плагин обновлён в `/Users/nikita/Documents/Test Vault/.obsidian/plugins/obsidian-gallery`.
 - Ручная приемка оператором успешна: keyboard navigation работает корректно после hover и click.
+- Добавлен video fragment range:
+  - time-tooltip на video progress rail показывает время в формате `mm:ss` и работает в fullscreen;
+  - `start` и `end` читаются и сохраняются в caption frontmatter;
+  - левый и правый edge handles регулируют отображаемый фрагмент;
+  - серый progress range сужается до выбранного диапазона;
+  - seek, keyboard step и playback ограничены выбранным фрагментом;
+  - `loop` зацикливает выбранный фрагмент `start → end`.
+- Обновлена документация [[documentation/phase-4-video]].
+- Проверки последней сессии пройдены: `npm test` — 61 тест, `npm run build` — успешно, `git diff --check` — без замечаний.
+- Собранный плагин повторно обновлён в `/Users/nikita/Documents/Test Vault/.obsidian/plugins/obsidian-gallery`.
+- Ручная приемка оператором успешна: сессия video fragment range признана полностью успешной.
 
 Осталось:
 - Продолжить Phase 5 Grid and Fullscreen: `grid`, paging группами, group captions, click-to-caption и fullscreen polish.
@@ -151,6 +162,10 @@
 # Log
 
 ## Phase 5 — Grid and Fullscreen
+
+### 2026-06-02 08:22 — Video Fragment Range
+
+Сессия завершена результативно: добавлены `start`/`end` для видео, drag handles на progress rail, time-tooltip на границах и loop выбранного фрагмента. Подробности: [[log/2026-06-02_08-22_video-fragment-range]].
 
 ### 2026-06-02 05:16 — Keyboard Navigation and Remote Sources Backlog
 

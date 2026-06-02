@@ -18,12 +18,16 @@ export interface CaptionVideoPlayback {
   autoplay: boolean;
   muted: boolean;
   loop: boolean;
+  start: number | null;
+  end: number | null;
 }
 
 export const DEFAULT_VIDEO_PLAYBACK: CaptionVideoPlayback = {
   autoplay: false,
   muted: false,
   loop: false,
+  start: null,
+  end: null,
 };
 
 export function splitCaptionMarkdown(markdown: string): CaptionMarkdownParts {
@@ -67,6 +71,12 @@ export function createCaptionMarkdown(input: CaptionNoteInput): string {
       `muted: ${input.playback.muted}`,
       `loop: ${input.playback.loop}`,
     );
+    if (input.playback.start !== null) {
+      frontmatter.push(`start: ${formatFrontmatterNumber(input.playback.start)}`);
+    }
+    if (input.playback.end !== null) {
+      frontmatter.push(`end: ${formatFrontmatterNumber(input.playback.end)}`);
+    }
   }
 
   return [
@@ -77,22 +87,26 @@ export function createCaptionMarkdown(input: CaptionNoteInput): string {
 }
 
 export function readFrontmatterNumber(frontmatter: string | null, key: string, fallback: number): number {
+  return readFrontmatterOptionalNumber(frontmatter, key) ?? fallback;
+}
+
+export function readFrontmatterOptionalNumber(frontmatter: string | null, key: string): number | null {
   if (!frontmatter) {
-    return fallback;
+    return null;
   }
 
   const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = frontmatter.match(new RegExp(`^${escapedKey}:\\s*(-?\\d+)\\s*$`, "m"));
+  const match = frontmatter.match(new RegExp(`^${escapedKey}:\\s*(-?\\d+(?:\\.\\d+)?)\\s*$`, "m"));
   if (!match) {
-    return fallback;
+    return null;
   }
 
-  const value = Number.parseInt(match[1], 10);
-  return Number.isFinite(value) ? value : fallback;
+  const value = Number.parseFloat(match[1]);
+  return Number.isFinite(value) ? value : null;
 }
 
 export function upsertFrontmatterNumber(frontmatter: string | null, key: string, value: number): string {
-  const nextLine = `${key}: ${value}`;
+  const nextLine = `${key}: ${formatFrontmatterNumber(value)}`;
   if (!frontmatter) {
     return nextLine;
   }
@@ -125,6 +139,8 @@ export function readVideoPlayback(frontmatter: string | null): CaptionVideoPlayb
     autoplay: readFrontmatterBoolean(frontmatter, "autoplay", DEFAULT_VIDEO_PLAYBACK.autoplay),
     muted: readFrontmatterBoolean(frontmatter, "muted", DEFAULT_VIDEO_PLAYBACK.muted),
     loop: readFrontmatterBoolean(frontmatter, "loop", DEFAULT_VIDEO_PLAYBACK.loop),
+    start: readFrontmatterOptionalNumber(frontmatter, "start"),
+    end: readFrontmatterOptionalNumber(frontmatter, "end"),
   };
 }
 
@@ -144,13 +160,36 @@ export function upsertFrontmatterBoolean(frontmatter: string | null, key: string
 }
 
 export function upsertVideoPlayback(frontmatter: string | null, playback: CaptionVideoPlayback): string {
-  return (Object.entries(playback) as Array<[keyof CaptionVideoPlayback, boolean]>)
+  const withBooleans = ([
+    ["autoplay", playback.autoplay],
+    ["muted", playback.muted],
+    ["loop", playback.loop],
+  ] as const)
     .reduce<string>(
       (nextFrontmatter, [key, value]) => upsertFrontmatterBoolean(nextFrontmatter, key, value),
       frontmatter ?? "",
+    );
+
+  return ([
+    ["start", playback.start],
+    ["end", playback.end],
+  ] as const)
+    .reduce<string>(
+      (nextFrontmatter, [key, value]) => value === null
+        ? nextFrontmatter
+        : upsertFrontmatterNumber(nextFrontmatter, key, value),
+      withBooleans,
     );
 }
 
 export function normalizeRotation(value: number): number {
   return ((value % 360) + 360) % 360;
+}
+
+function formatFrontmatterNumber(value: number): string {
+  if (Number.isInteger(value)) {
+    return String(value);
+  }
+
+  return value.toFixed(3).replace(/\.?0+$/, "");
 }
