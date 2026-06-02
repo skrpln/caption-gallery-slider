@@ -1,4 +1,4 @@
-// Documentation: [[documentation/architecture]], [[documentation/widget-size-controls]], [[documentation/keyboard-navigation-backlog]]
+// Documentation: [[documentation/architecture]], [[documentation/widget-size-controls]], [[documentation/keyboard-navigation-backlog]], [[documentation/crop-controls]]
 
 import { Notice, Plugin, TFile, type App, type Editor, type MarkdownPostProcessorContext, type MarkdownSectionInformation } from "obsidian";
 import { createObsidianVaultAdapter, getObsidianResourcePath } from "./media/obsidianVaultAdapter";
@@ -10,7 +10,12 @@ import { renderCaptionMarkdown } from "./captions/captionMarkdownRenderer";
 import { ObsidianCaptionService } from "./captions/obsidianCaptionService";
 import { ObsidianGallerySettingTab } from "./settings/ObsidianGallerySettingTab";
 import { DEFAULT_SETTINGS, type ObsidianGallerySettings } from "./settings/settings";
-import { getGalleryKeyboardDirection, type GalleryKeyboardTarget } from "./render/keyboardNavigation";
+import {
+  getGalleryCropKeyboardDirection,
+  getGalleryCropZoomDirection,
+  getGalleryKeyboardDirection,
+  type GalleryKeyboardTarget,
+} from "./render/keyboardNavigation";
 
 const HOVER_SOURCE_ID = "obsidian-gallery-caption";
 
@@ -48,6 +53,7 @@ export default class ObsidianGalleryPlugin extends Plugin {
         getCaption: (item) => captionService.readCaption(parseResult.config, item),
         saveCaption: (item, body) => captionService.saveCaption(parseResult.config, item, body),
         rotateCaption: (item, rotation) => captionService.rotateCaption(parseResult.config, item, rotation),
+        saveCrop: (item, crop) => captionService.saveCrop(parseResult.config, item, crop),
         saveVideoPlayback: (item, playback) => captionService.saveVideoPlayback(parseResult.config, item, playback),
         openCaption: (item) => captionService.openCaption(parseResult.config, item),
         saveSizeOption: async (option, value) => {
@@ -94,7 +100,7 @@ export default class ObsidianGalleryPlugin extends Plugin {
   }
 
   private registerGalleryKeyboardNavigation(): void {
-    this.registerDomEvent(document, "keydown", (event: KeyboardEvent) => {
+    const handleKeydown = (event: KeyboardEvent) => {
       const target = this.activeGallery;
       if (!target) {
         return;
@@ -105,12 +111,35 @@ export default class ObsidianGalleryPlugin extends Plugin {
         return;
       }
 
+      const textEditingActive = isTextEditingTarget(event.target);
       const direction = getGalleryKeyboardDirection(event, {
         inputActive: true,
         pointerInside: false,
         fullscreen: false,
-      }, false);
+      }, textEditingActive);
       if (!direction) {
+        const cropZoomDirection = getGalleryCropZoomDirection(event, {
+          inputActive: true,
+          pointerInside: false,
+          fullscreen: false,
+        }, textEditingActive);
+        if (cropZoomDirection && target.zoomCropFromKeyboard?.(cropZoomDirection)) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          return;
+        }
+
+        const cropDirection = getGalleryCropKeyboardDirection(event, {
+          inputActive: true,
+          pointerInside: false,
+          fullscreen: false,
+        }, textEditingActive);
+        if (!cropDirection || !target.panCropFromKeyboard?.(cropDirection)) {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopImmediatePropagation();
         return;
       }
 
@@ -121,8 +150,21 @@ export default class ObsidianGalleryPlugin extends Plugin {
       } else {
         target.nextFromKeyboard();
       }
+    };
+
+    document.addEventListener("keydown", handleKeydown, true);
+    this.register(() => {
+      document.removeEventListener("keydown", handleKeydown, true);
     });
   }
+}
+
+function isTextEditingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  return Boolean(target.closest("input, textarea, select, .og-gallery__caption-content[contenteditable='true']"));
 }
 
 function renderInlineMessage(containerEl: HTMLElement, messages: string[]): void {

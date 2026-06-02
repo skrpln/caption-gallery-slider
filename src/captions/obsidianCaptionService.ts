@@ -1,17 +1,20 @@
-// Documentation: [[documentation/phase-2-captions]], [[documentation/phase-4-video]]
+// Documentation: [[documentation/phase-2-captions]], [[documentation/phase-4-video]], [[documentation/crop-controls]]
 
 import { App, TFile, TFolder, type Vault } from "obsidian";
 import type { GalleryItem } from "../media/mediaTypes";
 import type { GalleryConfig } from "../parser/galleryBlockParser";
+import { DEFAULT_CROP, type CaptionCrop } from "./captionCrop";
 import { buildCaptionPath } from "./captionPath";
 import {
   createCaptionMarkdown,
   DEFAULT_VIDEO_PLAYBACK,
   normalizeRotation,
+  readCrop,
   readFrontmatterNumber,
   readVideoPlayback,
   splitCaptionMarkdown,
   type CaptionVideoPlayback,
+  upsertCrop,
   upsertFrontmatterNumber,
   upsertVideoPlayback,
 } from "./captionMarkdown";
@@ -23,6 +26,7 @@ export type CaptionState =
       body: "";
       exists: false;
       rotation: 0;
+      crop: CaptionCrop;
       playback: CaptionVideoPlayback;
     }
   | {
@@ -31,6 +35,7 @@ export type CaptionState =
       body: "";
       exists: false;
       rotation: 0;
+      crop: CaptionCrop;
       playback: CaptionVideoPlayback;
     }
   | {
@@ -39,6 +44,7 @@ export type CaptionState =
       body: string;
       exists: true;
       rotation: number;
+      crop: CaptionCrop;
       playback: CaptionVideoPlayback;
     };
 
@@ -62,6 +68,7 @@ export class ObsidianCaptionService {
         body: "",
         exists: false,
         rotation: 0,
+        crop: DEFAULT_CROP,
         playback: DEFAULT_VIDEO_PLAYBACK,
       };
     }
@@ -75,6 +82,7 @@ export class ObsidianCaptionService {
       body,
       exists: true,
       rotation: normalizeRotation(readFrontmatterNumber(frontmatter, "rotation", 0)),
+      crop: readCrop(frontmatter),
       playback: readVideoPlayback(frontmatter),
     };
   }
@@ -89,6 +97,7 @@ export class ObsidianCaptionService {
 
     let file = this.app.vault.getFileByPath(path);
     let rotation = 0;
+    let crop = DEFAULT_CROP;
     let playback = DEFAULT_VIDEO_PLAYBACK;
     if (!file) {
       try {
@@ -112,6 +121,7 @@ export class ObsidianCaptionService {
       const markdown = await this.app.vault.read(file);
       const { frontmatter } = splitCaptionMarkdown(markdown);
       rotation = normalizeRotation(readFrontmatterNumber(frontmatter, "rotation", 0));
+      crop = readCrop(frontmatter);
       playback = readVideoPlayback(frontmatter);
       const nextMarkdown = frontmatter === null
         ? body
@@ -125,6 +135,7 @@ export class ObsidianCaptionService {
       body,
       exists: true,
       rotation,
+      crop,
       playback,
     };
   }
@@ -152,12 +163,14 @@ export class ObsidianCaptionService {
     }
 
     let body = "";
+    let crop = DEFAULT_CROP;
     let playback = DEFAULT_VIDEO_PLAYBACK;
     if (file) {
       const markdown = await this.app.vault.read(file);
       const parts = splitCaptionMarkdown(markdown);
       body = parts.body;
       const { frontmatter } = parts;
+      crop = readCrop(frontmatter);
       playback = readVideoPlayback(frontmatter);
       const nextFrontmatter = upsertFrontmatterNumber(frontmatter, "rotation", normalizedRotation);
       await this.app.vault.modify(file, `---\n${nextFrontmatter}\n---\n${body}`);
@@ -169,6 +182,55 @@ export class ObsidianCaptionService {
       body,
       exists: true,
       rotation: normalizedRotation,
+      crop,
+      playback,
+    };
+  }
+
+  async saveCrop(config: GalleryConfig, item: GalleryItem, crop: CaptionCrop): Promise<CaptionState> {
+    const path = this.getCaptionPath(config, item);
+    if (!path) {
+      return unconfiguredCaption();
+    }
+
+    await ensureFolderPath(this.app.vault, parentPath(path));
+
+    let file = this.app.vault.getFileByPath(path);
+    if (!file) {
+      await this.app.vault.create(path, createCaptionMarkdown({
+        galleryId: config.galleryId,
+        target: item.kind === "video" ? "vid" : "img",
+        sourcePath: item.path,
+        body: "",
+        rotation: 0,
+        crop,
+        playback: item.kind === "video" ? DEFAULT_VIDEO_PLAYBACK : undefined,
+      }));
+      file = this.app.vault.getFileByPath(path);
+    }
+
+    let body = "";
+    let rotation = 0;
+    let playback = DEFAULT_VIDEO_PLAYBACK;
+    let nextCrop = crop;
+    if (file) {
+      const markdown = await this.app.vault.read(file);
+      const parts = splitCaptionMarkdown(markdown);
+      body = parts.body;
+      rotation = normalizeRotation(readFrontmatterNumber(parts.frontmatter, "rotation", 0));
+      playback = readVideoPlayback(parts.frontmatter);
+      const nextFrontmatter = upsertCrop(parts.frontmatter, crop);
+      nextCrop = readCrop(nextFrontmatter);
+      await this.app.vault.modify(file, `---\n${nextFrontmatter}\n---\n${body}`);
+    }
+
+    return {
+      status: "ready",
+      path,
+      body,
+      exists: true,
+      rotation,
+      crop: nextCrop,
       playback,
     };
   }
@@ -200,11 +262,13 @@ export class ObsidianCaptionService {
 
     let body = "";
     let rotation = 0;
+    let crop = DEFAULT_CROP;
     if (file) {
       const markdown = await this.app.vault.read(file);
       const parts = splitCaptionMarkdown(markdown);
       body = parts.body;
       rotation = normalizeRotation(readFrontmatterNumber(parts.frontmatter, "rotation", 0));
+      crop = readCrop(parts.frontmatter);
       const nextFrontmatter = upsertVideoPlayback(parts.frontmatter, playback);
       await this.app.vault.modify(file, `---\n${nextFrontmatter}\n---\n${body}`);
     }
@@ -215,6 +279,7 @@ export class ObsidianCaptionService {
       body,
       exists: true,
       rotation,
+      crop,
       playback,
     };
   }
@@ -286,6 +351,7 @@ function unconfiguredCaption(): CaptionState {
     body: "",
     exists: false,
     rotation: 0,
+    crop: DEFAULT_CROP,
     playback: DEFAULT_VIDEO_PLAYBACK,
   };
 }

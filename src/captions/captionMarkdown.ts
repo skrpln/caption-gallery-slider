@@ -1,4 +1,6 @@
-// Documentation: [[documentation/phase-2-captions]], [[documentation/phase-4-video]]
+// Documentation: [[documentation/phase-2-captions]], [[documentation/phase-4-video]], [[documentation/crop-controls]]
+
+import { DEFAULT_CROP, normalizeCrop, type CaptionCrop } from "./captionCrop";
 
 export interface CaptionMarkdownParts {
   frontmatter: string | null;
@@ -11,6 +13,7 @@ export interface CaptionNoteInput {
   sourcePath: string;
   body: string;
   rotation?: number;
+  crop?: CaptionCrop;
   playback?: CaptionVideoPlayback;
 }
 
@@ -79,6 +82,15 @@ export function createCaptionMarkdown(input: CaptionNoteInput): string {
     }
   }
 
+  if (input.crop) {
+    const crop = normalizeCrop(input.crop);
+    frontmatter.push(
+      `crop_x: ${formatFrontmatterNumber(crop.x)}`,
+      `crop_y: ${formatFrontmatterNumber(crop.y)}`,
+      `crop_zoom: ${formatFrontmatterNumber(crop.zoom)}`,
+    );
+  }
+
   return [
     ...frontmatter,
     "---",
@@ -144,6 +156,14 @@ export function readVideoPlayback(frontmatter: string | null): CaptionVideoPlayb
   };
 }
 
+export function readCrop(frontmatter: string | null): CaptionCrop {
+  return normalizeCrop({
+    x: readFrontmatterOptionalNumber(frontmatter, "crop_x") ?? DEFAULT_CROP.x,
+    y: readFrontmatterOptionalNumber(frontmatter, "crop_y") ?? DEFAULT_CROP.y,
+    zoom: readFrontmatterOptionalNumber(frontmatter, "crop_zoom") ?? DEFAULT_CROP.zoom,
+  });
+}
+
 export function upsertFrontmatterBoolean(frontmatter: string | null, key: string, value: boolean): string {
   const nextLine = `${key}: ${value}`;
   if (!frontmatter) {
@@ -179,6 +199,19 @@ export function upsertVideoPlayback(frontmatter: string | null, playback: Captio
         ? nextFrontmatter
         : upsertFrontmatterNumber(nextFrontmatter, key, value),
       withBooleans,
+    );
+}
+
+export function upsertCrop(frontmatter: string | null, crop: CaptionCrop): string {
+  const normalized = normalizeCrop(crop);
+  return ([
+    ["crop_x", normalized.x],
+    ["crop_y", normalized.y],
+    ["crop_zoom", normalized.zoom],
+  ] as const)
+    .reduce<string>(
+      (nextFrontmatter, [key, value]) => upsertFrontmatterNumber(nextFrontmatter, key, value),
+      frontmatter ?? "",
     );
 }
 

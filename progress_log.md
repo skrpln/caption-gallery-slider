@@ -1,8 +1,8 @@
 # Progress
 
-## Phase 5 — Grid and Fullscreen
+## Phase 5 — Corrections and Pre-release Improvements
 
-Текущий статус: Phase 5 начата с hardening keyboard navigation перед grid/fullscreen работами. Keyboard navigation стрелками принята оператором после перехода на plugin-level active gallery target. Дополнительно принят video fragment range: time-tooltip, `start`/`end` в caption frontmatter, drag handles и loop выбранного фрагмента. Remote media sources вынесены в отдельный backlog-дизайн для будущей реализации.
+Текущий статус: Phase 5 переопределена как этап правок, UX-polish, regression fixes и важных доработок, не вошедших в предыдущие фазы. Keyboard navigation стрелками принята оператором после перехода на plugin-level active gallery target. Дополнительно принят video fragment range: time-tooltip, `start`/`end` в caption frontmatter, drag handles и loop выбранного фрагмента. Manual crop controls для `view: crop` реализованы и приняты оператором. Реализация `grid != 1,1`, external URLs, slideshow autoplay, compression, media effects и audio support вынесены в [[plan#Feature Backlog]] как будущие post-release фичи.
 
 Сделано:
 - Изучен Media Slider как референс для keyboard navigation в Obsidian.
@@ -31,10 +31,29 @@
 - Проверки последней сессии пройдены: `npm test` — 61 тест, `npm run build` — успешно, `git diff --check` — без замечаний.
 - Собранный плагин повторно обновлён в `/Users/nikita/Documents/Test Vault/.obsidian/plugins/obsidian-gallery`.
 - Ручная приемка оператором успешна: сессия video fragment range признана полностью успешной.
+- Добавлены manual crop controls для `view: crop`:
+  - `crop_x`, `crop_y`, `crop_zoom` читаются и сохраняются во frontmatter caption-заметки;
+  - long-press drag в viewport через 1 секунду активирует pan видимой области;
+  - WASD смещает crop area у активной галереи;
+  - trackpad pinch через browser wheel gesture меняет zoom;
+  - hover-only кнопки `+`, `-`, `rotate` расположены справа снизу в одном action row;
+  - во время pan/zoom включается four-way move cursor.
+- По первой ручной проверке crop controls исправлены:
+  - отключён native browser drag для `<img>` и `<video>`, который мешал pan изображений и показывал системный file-drag tooltip;
+  - cursor states разделены: zoom gesture использует four-way move, long-press drag использует grabbing, кнопки `+`/`-` остаются обычными button controls;
+  - WASD больше не блокируется фокусом Obsidian editor, но остаётся заблокированным во время caption editing;
+  - WASD переведён на physical `KeyboardEvent.code` (`KeyW`/`KeyA`/`KeyS`/`KeyD`) и capture listener, чтобы работать при русской раскладке и до перехвата буквенных клавиш Obsidian editor;
+  - `ArrowUp` / `ArrowDown` добавлены как keyboard zoom in / zoom out для активной crop-галереи;
+  - crop zoom применяет `transform-origin` вместе с `object-position`, чтобы после увеличения движение было доступно по обеим плоскостям в пределах media.
+- Добавлена документация [[documentation/crop-controls]]; обновлены [[documentation/_MOC]] и [[plan]].
+- Проверки crop controls пройдены: `npm test` — 72 теста, `npm run build` — успешно, `git diff --check` — без замечаний.
+- Собранный плагин обновлён в `/Users/nikita/Documents/Test Vault/.obsidian/plugins/obsidian-gallery`.
+- Ручная приемка оператором успешна: crop controls, WASD и `ArrowUp` / `ArrowDown` признаны корректными.
 
 Осталось:
-- Продолжить Phase 5 Grid and Fullscreen: `grid`, paging группами, group captions, click-to-caption и fullscreen polish.
-- Remote media sources реализовывать позднее по [[documentation/remote-media-sources]].
+- Продолжить Phase 5 как стабилизацию текущего single-slide scope: regression fixes, fullscreen polish, video/caption/top navigation polish и синхронизация документации.
+- Готовить Phase 6 как формальную подготовку к публикации: README, release artifacts, accessibility/performance pass и community plugin checklist.
+- Крупные новые фичи реализовывать после релиза по [[plan#Feature Backlog]].
 
 ## Phase 4 — Video
 
@@ -161,7 +180,11 @@
 
 # Log
 
-## Phase 5 — Grid and Fullscreen
+## Phase 5 — Corrections and Pre-release Improvements
+
+### 2026-06-03 04:04 — Manual Crop Controls
+
+Сессия завершена результативно: добавлены и приняты manual crop controls для `view: crop`, включая pan/zoom, caption frontmatter `crop_x`/`crop_y`/`crop_zoom`, WASD, `ArrowUp`/`ArrowDown` и защиту от native image drag. Подробности: [[log/2026-06-03_04-04_manual-crop-controls]].
 
 ### 2026-06-02 08:22 — Video Fragment Range
 

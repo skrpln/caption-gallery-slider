@@ -32,8 +32,8 @@
 | **Phase 2 — Captions** | Lazy creation markdown-подписей, inline editing, markdown rendering, Obsidian links | Каждое медиа получает отдельную редактируемую caption-заметку |
 | **Phase 3 — Top Navigation** | Preview thumbnails, slider mode при длинных галереях, улучшенная навигация | Верхняя панель соответствует `navigation` и размеру набора |
 | **Phase 4 — Video** | Видео-форматы, кастомные минимальные controls, frontmatter playback state | Видео ведёт себя как нативный элемент галереи |
-| **Phase 5 — Grid and Fullscreen** | `grid`, paging группами, групповые подписи, click-to-caption, fullscreen | Галерея поддерживает сложные наборы и расширенный просмотр |
-| **Phase 6 — Release Hardening** | Производительность, accessibility, документация пользователя, community plugin checklist | Плагин готов к публикации |
+| **Phase 5 — Corrections and Pre-release Improvements** | Правки, UX-polish, regression fixes и важные доработки, не вошедшие в предыдущие фазы | Плагин стабилен как release candidate по текущему single-slide scope |
+| **Phase 6 — Formal Release and Publication** | Формальные требования Obsidian, packaging, README, релизные артефакты, community plugin checklist | Плагин готов к публикации |
 
 ## Phase 0 — Project Foundation
 
@@ -228,39 +228,57 @@ Scope:
 - При уходе со слайда видео останавливается или переводится в предсказуемое состояние.
 - UI controls не конфликтуют с Obsidian темой.
 
-## Phase 5 — Grid and Fullscreen
+## Phase 5 — Other Improvements
 
-Цель: реализовать групповой просмотр и fullscreen.
+Цель: закрыть важные правки и доработки, которые не вошли в предыдущие фазы, но нужны до формальной подготовки релиза. Phase 5 не расширяет базовый scope до новых крупных режимов вроде `grid != 1,1`; такие идеи уходят в [[plan#Feature Backlog]] и будут добавляться постепенно после релиза.
 
 Scope:
-- `grid: rows,cols`, максимум `5,7`.
-- Paging группами.
-- Верхняя панель принудительно slider.
-- Group captions:
-  - объединение caption bodies текущей группы;
-  - разделитель `---`;
-  - порядок слева направо, сверху вниз.
-- Click-to-caption:
-  - click по media cell скроллит caption panel к нужному фрагменту;
-  - краткая подсветка.
-- Fullscreen mode:
-  - отдельный overlay;
-  - escape/click close;
-  - сохранение текущего index.
+- Regression fixes по уже реализованному single-slide renderer:
+  - Reading mode;
+  - Live Preview;
+  - hover pop-up;
+  - fullscreen overlay;
+  - caption editing.
+- UX-polish текущего интерфейса:
+  - keyboard navigation и фокус;
+  - video controls;
+  - caption panel;
+  - top navigation;
+  - resize handles;
+  - fullscreen behavior.
+- Точечные доработки, уже принятые в Phase 5:
+  - plugin-level active gallery target для keyboard navigation;
+  - video fragment range через `start` / `end` во frontmatter caption-заметки;
+  - time-tooltip, drag handles и loop выбранного фрагмента.
+- Настройка области `view: crop`:
+  - хранение `crop_x`, `crop_y`, `crop_zoom` во frontmatter caption-заметки;
+  - long-press drag в viewport для смещения видимой области;
+  - WASD для смещения crop area у активной галереи;
+  - pinch/trackpad zoom через browser wheel gesture;
+  - hover-only кнопки `+` / `-` рядом с rotate для дискретного zoom;
+  - four-way move cursor во время pan/zoom interaction.
+- Документационная синхронизация:
+  - актуализировать phase-документацию под фактический scope;
+  - вынести крупные будущие фичи в backlog;
+  - убрать противоречия между [[plan]], [[progress_log]] и документацией.
 
 Тесты:
-- Разбиение items на pages.
-- Индекс элемента в grid cell.
-- Порядок group captions.
+- Unit-тесты для каждой новой pure-логики.
+- Regression-тесты для parser/state/render helpers, если правка затрагивает контракт.
+- `npm test`.
+- `npm run build`.
+- `git diff --check`.
 
 Критерии приемки:
-- Grid не ломает высоту и пропорции.
-- Подписи группы читаемы и связаны с изображениями.
-- Fullscreen работает без потери позиции.
+- Текущий single-slide gallery scope стабилен и не содержит известных blocking regressions.
+- Keyboard navigation работает предсказуемо в Reading mode, Live Preview, fullscreen и не перехватывает стрелки во время editing caption.
+- Видео и caption-доработки не ломают image-only галереи.
+- `view: crop` позволяет поправить видимую область без редактирования source code block, а crop state сохраняется отдельно для каждого media item через caption note.
+- Все крупные идеи, не входящие в релизный scope, явно описаны в backlog.
 
-## Phase 6 — Release Hardening
+## Phase 6 — Formal Release and Publication
 
-Цель: подготовить плагин к open-source публикации и каталогу community plugins.
+Цель: подготовить плагин к open-source публикации и каталогу community plugins без добавления новых крупных фич.
 
 Scope:
 - README для пользователя.
@@ -279,15 +297,45 @@ Scope:
   - version bump;
   - release artifact;
   - community plugin checklist.
+- Repository and publication readiness:
+  - проверить `manifest.json`;
+  - проверить `versions.json`, если нужен для релизного процесса;
+  - подготовить release notes;
+  - проверить требования Obsidian community plugins.
 
 Критерии приемки:
 - Плагин можно установить вручную в vault.
 - Пользователь может создать галерею по README без чтения исходников.
 - Нет известных blocking issues для публикации.
 
-## Feature Backlog — Remote Media Sources
+## Feature Backlog
 
-Цель: добавить поддержку явных remote media entries в `list`: прямые ссылки на изображения, прямые ссылки на видео, YouTube links и будущие allowlisted provider embeds.
+Backlog содержит крупные фичи, которые важны для будущего развития, но не входят в Phase 5 и Phase 6 release scope. Их можно реализовывать постепенно после первого релиза.
+
+### Grid Layouts
+
+Цель: добавить групповой просмотр для `grid`, отличного от дефолтного `1,1`.
+
+Scope:
+- `grid: rows,cols`, максимум `5,7`;
+- paging группами;
+- верхняя панель принудительно работает как slider;
+- group captions:
+  - объединение caption bodies текущей группы;
+  - разделитель `---`;
+  - порядок слева направо, сверху вниз;
+- click-to-caption:
+  - click по media cell скроллит caption panel к нужному фрагменту;
+  - краткая подсветка фрагмента подписи, соответствующей media.
+
+Критерии приемки:
+- Grid не ломает высоту и пропорции.
+- Подписи группы читаемы и связаны с изображениями.
+- `navigation: preview` остаётся доступен только для `grid: 1,1`.
+
+### Remote Media Sources
+
+Цель: добавить поддержку external URLs в `list`: прямые ссылки на изображения, прямые ссылки на видео, YouTube links и будущие allowlisted provider embeds.
 
 Архитектурное описание: [[documentation/remote-media-sources]].
 
@@ -306,6 +354,78 @@ Scope:
 - прямые remote image/video URLs рендерятся без копирования в vault;
 - unsupported URLs показывают inline state и не ломают галерею;
 - captions работают для remote media так же лениво, как для vault media.
+
+### Slideshow Autoplay
+
+Цель: добавить автоматическое пролистывание галереи с настройками из code block.
+
+Планируемый синтаксис:
+
+```md
+slideshow: true
+speed: 1
+```
+
+Scope:
+- `slideshow: true | false`, default: `false`;
+- `speed`: количество пролистываний в секунду, с безопасным дефолтом;
+- при `slideshow: true` галерея автоматически пролистывается независимо от положения курсора;
+- autoplay временно останавливается только во время редактирования зоны подписи;
+- slideshow должен работать предсказуемо для image и video items.
+
+Критерии приемки:
+- Parser валидирует `slideshow` и `speed`.
+- Autoplay не конфликтует с ручной навигацией.
+- Caption editing полностью блокирует автоматическое пролистывание до выхода из режима редактирования.
+
+### Customizable Compression
+
+Цель: добавить инструменты оптимизации качества и производительности медиа.
+
+Scope:
+- определить, работает ли compression как локальная команда, настройка экспорта или runtime-предпочтение;
+- не менять исходные vault-файлы без явного действия пользователя;
+- продумать presets качества для изображений и видео;
+- задокументировать ограничения Obsidian desktop/mobile.
+
+Критерии приемки:
+- Пользователь понимает, какие файлы будут изменены или созданы.
+- Compression не ухудшает уже существующий lazy loading и runtime performance.
+- Есть безопасный fallback для неподдерживаемых форматов.
+
+### Media Effects
+
+Цель: добавить визуальные эффекты для отдельных media items.
+
+Первый кандидат: spoiler blur, который скрывает медиа размытием и исчезает по нажатию, как spoiler media в Telegram.
+
+Scope:
+- хранить effect state в caption frontmatter;
+- поддержать минимум `effect: spoiler-blur`;
+- эффект должен быть доступен для image и video items;
+- состояние раскрытия не должно случайно сохраняться как постоянное снятие эффекта без явного действия пользователя.
+
+Критерии приемки:
+- Spoiler blur не мешает caption editing и video controls.
+- Повторное открытие заметки возвращает item в ожидаемое состояние.
+- Эффект визуально адаптируется к светлой и тёмной теме.
+
+### Audio Support
+
+Цель: добавить аудио как media type, близкий по поведению к видео, но с отдельной компактной визуализацией.
+
+Scope:
+- поддержать распространённые audio formats;
+- использовать controls, близкие к video controls: play / pause, mute, loop, progress;
+- добавить простой visual equalizer overlay или panel;
+- по нажатию на rotate поворачивать и менять цвет equalizer;
+- продумать playlist behavior прямо в заметках;
+- хранить playback и визуальные настройки в caption frontmatter.
+
+Критерии приемки:
+- Audio items участвуют в общем порядке галереи.
+- Caption notes работают для audio так же, как для image/video.
+- Playlist behavior не конфликтует с обычным `list` и `dir`.
 
 ## Текущие архитектурные рекомендации
 

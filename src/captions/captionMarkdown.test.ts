@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   createCaptionMarkdown,
   normalizeRotation,
+  readCrop,
   readFrontmatterBoolean,
   readFrontmatterNumber,
   readVideoPlayback,
   splitCaptionMarkdown,
+  upsertCrop,
   upsertFrontmatterBoolean,
   upsertFrontmatterNumber,
   upsertVideoPlayback,
@@ -50,6 +52,18 @@ describe("createCaptionMarkdown", () => {
       }),
     ).toBe('---\ngallery_id: "vacation"\ntarget: "vid"\nsource_path: "Attachments/clip.mp4"\nrotation: 0\nautoplay: false\nmuted: true\nloop: true\nstart: 12\nend: 42.5\n---\n');
   });
+
+  it("can include crop frontmatter", () => {
+    expect(
+      createCaptionMarkdown({
+        galleryId: "vacation",
+        target: "img",
+        sourcePath: "Attachments/photo.png",
+        body: "",
+        crop: { x: 32.5, y: 68, zoom: 1.75 },
+      }),
+    ).toBe('---\ngallery_id: "vacation"\ntarget: "img"\nsource_path: "Attachments/photo.png"\nrotation: 0\ncrop_x: 32.5\ncrop_y: 68\ncrop_zoom: 1.75\n---\n');
+  });
 });
 
 describe("caption frontmatter numbers", () => {
@@ -62,6 +76,20 @@ describe("caption frontmatter numbers", () => {
   it("normalizes rotation to one clockwise circle", () => {
     expect(normalizeRotation(450)).toBe(90);
     expect(normalizeRotation(-90)).toBe(270);
+  });
+});
+
+describe("caption crop frontmatter", () => {
+  it("reads and upserts crop position", () => {
+    const frontmatter = "crop_x: 34\ncrop_y: 66.5\ncrop_zoom: 2";
+
+    expect(readCrop(frontmatter)).toEqual({
+      x: 34,
+      y: 66.5,
+      zoom: 2,
+    });
+    expect(upsertCrop("gallery_id: test", { x: 75, y: 25, zoom: 1.5 }))
+      .toBe("gallery_id: test\ncrop_x: 75\ncrop_y: 25\ncrop_zoom: 1.5");
   });
 });
 

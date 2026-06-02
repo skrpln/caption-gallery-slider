@@ -1,4 +1,4 @@
-// Documentation: [[documentation/architecture]], [[documentation/phase-4-video]], [[documentation/widget-size-controls]], [[documentation/keyboard-navigation-backlog]]
+// Documentation: [[documentation/architecture]], [[documentation/phase-4-video]], [[documentation/widget-size-controls]], [[documentation/keyboard-navigation-backlog]], [[documentation/crop-controls]]
 
 import { MarkdownRenderChild, setIcon, setTooltip } from "obsidian";
 import type { GalleryConfig } from "../parser/galleryBlockParser";
@@ -7,6 +7,16 @@ import type { GalleryItem } from "../media/mediaTypes";
 import { createGalleryState, goToIndex, nextIndex, previousIndex, type GalleryState } from "../state/galleryState";
 import type { CaptionState } from "../captions/obsidianCaptionService";
 import { DEFAULT_VIDEO_PLAYBACK, type CaptionVideoPlayback } from "../captions/captionMarkdown";
+import {
+  CROP_KEYBOARD_STEP,
+  CROP_ZOOM_STEP,
+  DEFAULT_CROP,
+  panCrop,
+  panCropByPixels,
+  scaleCropZoom,
+  zoomCrop,
+  type CaptionCrop,
+} from "../captions/captionCrop";
 import {
   chooseTopNavigationLayout,
   navigationPointerToIndex,
@@ -17,7 +27,7 @@ import {
   registerAutoHidingTooltip,
   setTooltipLabel,
 } from "./autoHidingTooltip";
-import type { GalleryKeyboardTarget } from "./keyboardNavigation";
+import type { GalleryCropKeyboardDirection, GalleryCropZoomDirection, GalleryKeyboardTarget } from "./keyboardNavigation";
 import {
   clampVideoRangeEdge,
   formatVideoProgressTime,
@@ -34,6 +44,7 @@ export interface GalleryRendererOptions {
   getCaption?(item: GalleryItem): Promise<CaptionState>;
   saveCaption?(item: GalleryItem, body: string): Promise<CaptionState>;
   rotateCaption?(item: GalleryItem, rotation: number): Promise<CaptionState>;
+  saveCrop?(item: GalleryItem, crop: CaptionCrop): Promise<CaptionState>;
   saveVideoPlayback?(item: GalleryItem, playback: CaptionVideoPlayback): Promise<CaptionState>;
   openCaption?(item: GalleryItem): Promise<void>;
   saveSizeOption?(option: GallerySizeOption, value: number): Promise<void>;
@@ -54,11 +65,22 @@ interface GalleryResizeState {
   startHeight: number;
 }
 
+interface CropDragState {
+  pointerId: number;
+  lastX: number;
+  lastY: number;
+  activated: boolean;
+  timer: ReturnType<typeof setTimeout> | null;
+}
+
 type VideoRangeEdge = "start" | "end";
 
 const MIN_VIEW_HEIGHT = 120;
 const MIN_CAPTION_HEIGHT = 28;
 const MAX_GALLERY_SIZE = 1400;
+const CROP_LONG_PRESS_MS = 1000;
+const CROP_WHEEL_ZOOM_DIVISOR = 500;
+const CROP_INTERACTION_CURSOR_MS = 320;
 let videoProgressLabelId = 0;
 
 export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeyboardTarget {
@@ -68,6 +90,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   private readonly getCaption: ((item: GalleryItem) => Promise<CaptionState>) | null;
   private readonly saveCaption: ((item: GalleryItem, body: string) => Promise<CaptionState>) | null;
   private readonly rotateCaption: ((item: GalleryItem, rotation: number) => Promise<CaptionState>) | null;
+  private readonly saveCrop: ((item: GalleryItem, crop: CaptionCrop) => Promise<CaptionState>) | null;
   private readonly saveVideoPlayback: ((item: GalleryItem, playback: CaptionVideoPlayback) => Promise<CaptionState>) | null;
   private readonly openCaption: ((item: GalleryItem) => Promise<void>) | null;
   private readonly saveSizeOption: ((option: GallerySizeOption, value: number) => Promise<void>) | null;
@@ -82,6 +105,8 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   private captionState: CaptionState | null = null;
   private fullscreenButtonEl: HTMLButtonElement | null = null;
   private rotateButtonEl: HTMLButtonElement | null = null;
+  private zoomInButtonEl: HTMLButtonElement | null = null;
+  private zoomOutButtonEl: HTMLButtonElement | null = null;
   private mediaEl: HTMLImageElement | HTMLVideoElement | null = null;
   private videoControlsEl: HTMLElement | null = null;
   private videoPlayButtonEl: HTMLButtonElement | null = null;
@@ -105,6 +130,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   private pointerStartX: number | null = null;
   private lastWheelNavigationAt = 0;
   private currentRotation = 0;
+  private currentCrop: CaptionCrop = DEFAULT_CROP;
   private currentPlayback: CaptionVideoPlayback = DEFAULT_VIDEO_PLAYBACK;
   private inputActive = false;
   private pointerInside = false;
@@ -112,6 +138,10 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   private captionRenderToken = 0;
   private captionSaveToken = 0;
   private resizeState: GalleryResizeState | null = null;
+  private cropDragState: CropDragState | null = null;
+  private cropPersistTimer: ReturnType<typeof setTimeout> | null = null;
+  private cropZoomCursorTimer: ReturnType<typeof setTimeout> | null = null;
+  private suppressViewportClick = false;
 
   constructor(containerEl: HTMLElement, options: GalleryRendererOptions) {
     super(containerEl);
@@ -121,6 +151,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     this.getCaption = options.getCaption ?? null;
     this.saveCaption = options.saveCaption ?? null;
     this.rotateCaption = options.rotateCaption ?? null;
+    this.saveCrop = options.saveCrop ?? null;
     this.saveVideoPlayback = options.saveVideoPlayback ?? null;
     this.openCaption = options.openCaption ?? null;
     this.saveSizeOption = options.saveSizeOption ?? null;
@@ -131,6 +162,11 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
 
   onload(): void {
     this.render();
+    this.register(() => {
+      this.clearCropDragTimer();
+      this.clearCropPersistTimer();
+      this.clearCropZoomCursorTimer();
+    });
   }
 
   private render(): void {
@@ -213,6 +249,26 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     this.previous();
   }
 
+  panCropFromKeyboard(direction: GalleryCropKeyboardDirection): boolean {
+    if (!this.canAdjustCrop()) {
+      return false;
+    }
+
+    const delta = cropKeyboardDelta(direction);
+    this.applyCrop(panCrop(this.currentCrop, delta.x, delta.y));
+    this.queuePersistCrop();
+    return true;
+  }
+
+  zoomCropFromKeyboard(direction: GalleryCropZoomDirection): boolean {
+    if (!this.canAdjustCrop()) {
+      return false;
+    }
+
+    this.adjustCropZoom(direction === "in" ? CROP_ZOOM_STEP : -CROP_ZOOM_STEP, true);
+    return true;
+  }
+
   private isRootFullscreen(): boolean {
     if (!this.rootEl) {
       return false;
@@ -246,6 +302,36 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
       void this.rotateCurrentMedia();
     });
     return button;
+  }
+
+  private createCropZoomButton(kind: "in" | "out"): HTMLButtonElement {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `og-gallery__crop-zoom og-gallery__crop-zoom--${kind}`;
+    this.setButtonLabel(button, kind === "in" ? "zoom in" : "zoom out");
+    setIcon(button, kind === "in" ? "plus" : "minus");
+    this.registerDomEvent(button, "click", (event: MouseEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      this.adjustCropZoom(kind === "in" ? CROP_ZOOM_STEP : -CROP_ZOOM_STEP, true);
+    });
+    if (kind === "in") {
+      this.zoomInButtonEl = button;
+    } else {
+      this.zoomOutButtonEl = button;
+    }
+    return button;
+  }
+
+  private createMediaActions(): HTMLElement {
+    const actionsEl = document.createElement("div");
+    actionsEl.className = "og-gallery__media-actions";
+    actionsEl.append(
+      this.createCropZoomButton("in"),
+      this.createCropZoomButton("out"),
+      this.createRotateButton(),
+    );
+    return actionsEl;
   }
 
   private createNavigation(): HTMLElement {
@@ -384,7 +470,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     this.viewportEl = viewportEl;
 
     const fullscreenButton = this.createFullscreenButton();
-    const rotateButton = this.createRotateButton();
+    const mediaActionsEl = this.createMediaActions();
     const videoControlsEl = this.createVideoControls();
     const resizeHandleEl = this.createResizeHandle("view_height");
 
@@ -393,12 +479,19 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
       this.setInputActive(true);
       this.activateKeyboardTarget?.(this);
       this.pointerStartX = event.clientX;
+      this.startCropPress(event);
     });
 
     this.registerDomEvent(viewportEl, "click", (event: MouseEvent) => {
       this.pointerInside = true;
       this.setInputActive(true);
       this.activateKeyboardTarget?.(this);
+      if (this.suppressViewportClick) {
+        this.suppressViewportClick = false;
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       if (event.target instanceof HTMLElement && event.target.closest(
         "button, .og-gallery__video-controls, .og-gallery__nav",
       )) {
@@ -411,9 +504,10 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
       }
     });
 
-    this.registerDomEvent(viewportEl, "pointermove", () => {
+    this.registerDomEvent(viewportEl, "pointermove", (event: PointerEvent) => {
       this.pointerInside = true;
       this.activateKeyboardTarget?.(this);
+      this.updateCropPress(event);
     });
 
     this.registerDomEvent(viewportEl, "pointerover", () => {
@@ -432,6 +526,15 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
       }
 
       if (event.target instanceof HTMLElement && event.target.closest(".og-gallery__video-controls")) {
+        return;
+      }
+
+      if (event.ctrlKey && this.canAdjustCrop()) {
+        event.preventDefault();
+        event.stopPropagation();
+        this.applyCrop(scaleCropZoom(this.currentCrop, Math.exp(-event.deltaY / CROP_WHEEL_ZOOM_DIVISOR)));
+        this.queuePersistCrop();
+        this.markCropZoomInteraction();
         return;
       }
 
@@ -460,6 +563,11 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     });
 
     this.registerDomEvent(viewportEl, "pointerup", (event: PointerEvent) => {
+      if (this.finishCropPress(event, true)) {
+        this.pointerStartX = null;
+        return;
+      }
+
       if (this.pointerStartX === null) {
         return;
       }
@@ -478,7 +586,12 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
       }
     });
 
-    viewportEl.append(videoControlsEl, fullscreenButton, rotateButton, resizeHandleEl);
+    this.registerDomEvent(viewportEl, "pointercancel", (event: PointerEvent) => {
+      this.finishCropPress(event, false);
+      this.pointerStartX = null;
+    });
+
+    viewportEl.append(videoControlsEl, fullscreenButton, mediaActionsEl, resizeHandleEl);
     return viewportEl;
   }
 
@@ -939,6 +1052,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     }
 
     this.applyRotation(0);
+    this.applyCrop(DEFAULT_CROP);
     this.applyVideoPlayback(DEFAULT_VIDEO_PLAYBACK);
 
     this.dotEls.forEach((dotEl, index) => {
@@ -987,6 +1101,11 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     imageEl.className = "og-gallery__media";
     imageEl.loading = "lazy";
     imageEl.decoding = "async";
+    imageEl.draggable = false;
+    this.registerDomEvent(imageEl, "dragstart", (event: DragEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
     return imageEl;
   }
 
@@ -996,6 +1115,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     videoEl.preload = "metadata";
     videoEl.controls = false;
     videoEl.playsInline = true;
+    videoEl.draggable = false;
 
     this.registerDomEvent(videoEl, "timeupdate", () => this.handleVideoTimeUpdate());
     this.registerDomEvent(videoEl, "durationchange", () => {
@@ -1035,9 +1155,11 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
       exists: false,
       rotation: 0,
       playback: DEFAULT_VIDEO_PLAYBACK,
+      crop: DEFAULT_CROP,
     };
 
     this.applyRotation(this.captionState.rotation);
+    this.applyCrop(this.captionState.crop);
     this.applyVideoPlayback(this.captionState.playback);
 
     if (!this.captionEl || !this.captionContentEl) {
@@ -1168,6 +1290,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
 
     this.captionState = nextState;
     this.applyRotation(nextState.rotation);
+    this.applyCrop(nextState.crop);
     this.captionOpenButtonEl?.classList.remove("is-hidden");
     if (this.captionEl && nextState.path) {
       this.captionEl.dataset.captionPath = nextState.path;
@@ -1190,6 +1313,161 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     } else {
       this.mediaEl.style.removeProperty("--og-media-box-width");
       this.mediaEl.style.removeProperty("--og-media-box-height");
+    }
+  }
+
+  private applyCrop(crop: CaptionCrop): void {
+    this.currentCrop = crop;
+    if (!this.mediaEl) {
+      return;
+    }
+
+    this.mediaEl.style.setProperty("--og-media-crop-zoom", String(crop.zoom));
+    this.mediaEl.style.objectPosition = `${crop.x}% ${crop.y}%`;
+    this.mediaEl.style.transformOrigin = `${crop.x}% ${crop.y}%`;
+    this.zoomOutButtonEl?.toggleAttribute("disabled", crop.zoom <= 1);
+  }
+
+  private canAdjustCrop(): boolean {
+    return this.config.view === "crop" && Boolean(this.mediaEl && this.items[this.state.currentIndex]);
+  }
+
+  private adjustCropZoom(delta: number, persist: boolean): void {
+    if (!this.canAdjustCrop()) {
+      return;
+    }
+
+    this.applyCrop(zoomCrop(this.currentCrop, delta));
+    this.markCropZoomInteraction();
+    if (persist) {
+      this.queuePersistCrop();
+    }
+  }
+
+  private startCropPress(event: PointerEvent): void {
+    if (!this.canAdjustCrop() || event.button !== 0 || isViewportControlTarget(event.target)) {
+      return;
+    }
+
+    this.clearCropDragTimer();
+    this.cropDragState = {
+      pointerId: event.pointerId,
+      lastX: event.clientX,
+      lastY: event.clientY,
+      activated: false,
+      timer: setTimeout(() => {
+        if (!this.cropDragState || this.cropDragState.pointerId !== event.pointerId || !this.viewportEl) {
+          return;
+        }
+
+        this.cropDragState.activated = true;
+        this.cropDragState.timer = null;
+        this.viewportEl.setPointerCapture(event.pointerId);
+        this.rootEl?.classList.add("is-crop-dragging");
+      }, CROP_LONG_PRESS_MS),
+    };
+  }
+
+  private updateCropPress(event: PointerEvent): void {
+    if (!this.cropDragState || this.cropDragState.pointerId !== event.pointerId || !this.cropDragState.activated || !this.viewportEl) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    const deltaX = event.clientX - this.cropDragState.lastX;
+    const deltaY = event.clientY - this.cropDragState.lastY;
+    this.cropDragState.lastX = event.clientX;
+    this.cropDragState.lastY = event.clientY;
+    this.applyCrop(panCropByPixels(
+      this.currentCrop,
+      deltaX,
+      deltaY,
+      this.viewportEl.clientWidth,
+      this.viewportEl.clientHeight,
+    ));
+  }
+
+  private finishCropPress(event: PointerEvent, persist: boolean): boolean {
+    if (!this.cropDragState || this.cropDragState.pointerId !== event.pointerId) {
+      return false;
+    }
+
+    const wasActivated = this.cropDragState.activated;
+    this.clearCropDragTimer();
+    if (this.viewportEl?.hasPointerCapture(event.pointerId)) {
+      this.viewportEl.releasePointerCapture(event.pointerId);
+    }
+    this.rootEl?.classList.remove("is-crop-dragging");
+    this.cropDragState = null;
+
+    if (!wasActivated) {
+      return false;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    this.suppressViewportClick = true;
+    if (persist) {
+      this.queuePersistCrop();
+    }
+    return true;
+  }
+
+  private markCropZoomInteraction(): void {
+    this.rootEl?.classList.add("is-crop-zooming");
+    this.clearCropZoomCursorTimer();
+    this.cropZoomCursorTimer = setTimeout(() => {
+      this.rootEl?.classList.remove("is-crop-zooming");
+      this.cropZoomCursorTimer = null;
+    }, CROP_INTERACTION_CURSOR_MS);
+  }
+
+  private queuePersistCrop(): void {
+    this.clearCropPersistTimer();
+    this.cropPersistTimer = setTimeout(() => {
+      this.cropPersistTimer = null;
+      void this.persistCrop(this.currentCrop);
+    }, 260);
+  }
+
+  private async persistCrop(crop: CaptionCrop): Promise<void> {
+    const item = this.items[this.state.currentIndex];
+    if (!item || !this.saveCrop) {
+      return;
+    }
+
+    const nextState = await this.saveCrop(item, crop);
+    if (nextState.status === "unconfigured") {
+      return;
+    }
+
+    this.captionState = nextState;
+    this.applyCrop(nextState.crop);
+    this.captionOpenButtonEl?.classList.remove("is-hidden");
+    if (this.captionEl && nextState.path) {
+      this.captionEl.dataset.captionPath = nextState.path;
+    }
+  }
+
+  private clearCropDragTimer(): void {
+    if (this.cropDragState?.timer) {
+      clearTimeout(this.cropDragState.timer);
+      this.cropDragState.timer = null;
+    }
+  }
+
+  private clearCropPersistTimer(): void {
+    if (this.cropPersistTimer) {
+      clearTimeout(this.cropPersistTimer);
+      this.cropPersistTimer = null;
+    }
+  }
+
+  private clearCropZoomCursorTimer(): void {
+    if (this.cropZoomCursorTimer) {
+      clearTimeout(this.cropZoomCursorTimer);
+      this.cropZoomCursorTimer = null;
     }
   }
 
@@ -1514,6 +1792,25 @@ function createArrowButton(label: string, direction: "left" | "right"): HTMLButt
 
 function setButtonLabel(button: HTMLButtonElement, label: string): void {
   setTooltipLabel(button, label);
+}
+
+function cropKeyboardDelta(direction: GalleryCropKeyboardDirection): { x: number; y: number } {
+  switch (direction) {
+    case "up":
+      return { x: 0, y: -CROP_KEYBOARD_STEP };
+    case "left":
+      return { x: -CROP_KEYBOARD_STEP, y: 0 };
+    case "down":
+      return { x: 0, y: CROP_KEYBOARD_STEP };
+    case "right":
+      return { x: CROP_KEYBOARD_STEP, y: 0 };
+  }
+}
+
+function isViewportControlTarget(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && Boolean(target.closest(
+    "button, .og-gallery__video-controls, .og-gallery__nav, .og-gallery__resize-handle",
+  ));
 }
 
 function createMessage(message: string): HTMLElement {
