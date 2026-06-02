@@ -18,6 +18,7 @@ import {
   setTooltipLabel,
 } from "./autoHidingTooltip";
 import type { GalleryKeyboardTarget } from "./keyboardNavigation";
+import { formatVideoProgressTime, videoProgressPointerTime } from "./videoProgressTime";
 
 export interface GalleryRendererOptions {
   config: GalleryConfig;
@@ -49,6 +50,7 @@ interface GalleryResizeState {
 const MIN_VIEW_HEIGHT = 120;
 const MIN_CAPTION_HEIGHT = 28;
 const MAX_GALLERY_SIZE = 1400;
+let videoProgressLabelId = 0;
 
 export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeyboardTarget {
   private readonly config: GalleryConfig;
@@ -77,6 +79,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   private videoMuteButtonEl: HTMLButtonElement | null = null;
   private videoLoopButtonEl: HTMLButtonElement | null = null;
   private videoProgressEl: HTMLElement | null = null;
+  private videoProgressTooltipEl: HTMLElement | null = null;
   private navEl: HTMLElement | null = null;
   private navRailEl: HTMLElement | null = null;
   private navThumbEl: HTMLElement | null = null;
@@ -488,16 +491,27 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     progressEl.setAttribute("aria-valuemin", "0");
     progressEl.setAttribute("aria-valuemax", "1000");
     progressEl.setAttribute("aria-valuenow", "0");
+    progressEl.setAttribute("aria-valuetext", "00:00");
     progressEl.tabIndex = 0;
+    const progressLabelEl = document.createElement("span");
+    videoProgressLabelId += 1;
+    progressLabelEl.id = `og-gallery-video-progress-${videoProgressLabelId}`;
+    progressLabelEl.className = "og-gallery__visually-hidden";
+    progressLabelEl.textContent = "video position";
+    progressEl.setAttribute("aria-labelledby", progressLabelEl.id);
     const progressThumbEl = document.createElement("div");
     progressThumbEl.className = "og-gallery__video-progress-thumb";
-    progressEl.appendChild(progressThumbEl);
-    this.setAccessibleTooltip(progressEl, "video position");
+    progressEl.append(progressLabelEl, progressThumbEl);
+    const progressTooltipEl = document.createElement("div");
+    progressTooltipEl.className = "og-gallery__video-time-tooltip";
+    progressTooltipEl.textContent = "00:00";
+    this.rootEl?.appendChild(progressTooltipEl);
 
     this.videoPlayButtonEl = playButtonEl;
     this.videoMuteButtonEl = muteButtonEl;
     this.videoLoopButtonEl = loopButtonEl;
     this.videoProgressEl = progressEl;
+    this.videoProgressTooltipEl = progressTooltipEl;
 
     this.registerDomEvent(playButtonEl, "click", (event: MouseEvent) => {
       event.preventDefault();
@@ -518,20 +532,35 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
       event.preventDefault();
       this.draggingVideoProgress = true;
       progressEl.setPointerCapture(event.pointerId);
+      this.updateVideoProgressTooltip(event);
       this.seekVideoFromProgressPointer(event);
     });
 
-    this.registerDomEvent(progressEl, "pointermove", (event: PointerEvent) => {
-      if (!this.draggingVideoProgress) {
-        return;
-      }
+    this.registerDomEvent(progressEl, "pointerenter", (event: PointerEvent) => {
+      this.updateVideoProgressTooltip(event);
+    });
 
-      event.preventDefault();
-      this.seekVideoFromProgressPointer(event);
+    this.registerDomEvent(progressEl, "pointermove", (event: PointerEvent) => {
+      this.updateVideoProgressTooltip(event);
+      if (this.draggingVideoProgress) {
+        event.preventDefault();
+        this.seekVideoFromProgressPointer(event);
+      }
+    });
+
+    this.registerDomEvent(progressEl, "pointerleave", () => {
+      if (!this.draggingVideoProgress) {
+        this.hideVideoProgressTooltip();
+      }
     });
 
     this.registerDomEvent(progressEl, "pointerup", (event: PointerEvent) => {
       this.draggingVideoProgress = false;
+      if (this.isPointerInsideVideoProgress(event)) {
+        this.updateVideoProgressTooltip(event);
+      } else {
+        this.hideVideoProgressTooltip();
+      }
       if (progressEl.hasPointerCapture(event.pointerId)) {
         progressEl.releasePointerCapture(event.pointerId);
       }
@@ -539,6 +568,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
 
     this.registerDomEvent(progressEl, "pointercancel", (event: PointerEvent) => {
       this.draggingVideoProgress = false;
+      this.hideVideoProgressTooltip();
       if (progressEl.hasPointerCapture(event.pointerId)) {
         progressEl.releasePointerCapture(event.pointerId);
       }
@@ -818,6 +848,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
       return;
     }
 
+    this.hideVideoProgressTooltip();
     this.pauseCurrentVideo();
     this.ensureMediaElement(item);
     const resourcePath = this.getResourcePath(item.path);
@@ -1176,9 +1207,50 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     }
 
     const rect = this.videoProgressEl.getBoundingClientRect();
-    const ratio = clamp((event.clientX - rect.left) / rect.width, 0, 1);
-    videoEl.currentTime = ratio * videoEl.duration;
+    videoEl.currentTime = videoProgressPointerTime(event.clientX, rect.left, rect.width, videoEl.duration);
     this.updateVideoProgress();
+  }
+
+  private updateVideoProgressTooltip(event: PointerEvent): void {
+    const videoEl = this.getCurrentVideoElement();
+    if (
+      !videoEl
+      || !this.videoProgressEl
+      || !this.videoProgressTooltipEl
+      || !this.rootEl
+      || !Number.isFinite(videoEl.duration)
+      || videoEl.duration <= 0
+    ) {
+      this.hideVideoProgressTooltip();
+      return;
+    }
+
+    const railRect = this.videoProgressEl.getBoundingClientRect();
+    const rootRect = this.rootEl.getBoundingClientRect();
+    const time = videoProgressPointerTime(event.clientX, railRect.left, railRect.width, videoEl.duration);
+    const tooltipX = clamp(event.clientX - rootRect.left, 30, Math.max(30, rootRect.width - 30));
+    const tooltipY = clamp(event.clientY - rootRect.top, 20, Math.max(20, rootRect.height - 6));
+
+    this.videoProgressTooltipEl.textContent = formatVideoProgressTime(time);
+    this.videoProgressTooltipEl.style.left = `${tooltipX}px`;
+    this.videoProgressTooltipEl.style.top = `${tooltipY}px`;
+    this.videoProgressTooltipEl.classList.add("is-visible");
+  }
+
+  private hideVideoProgressTooltip(): void {
+    this.videoProgressTooltipEl?.classList.remove("is-visible");
+  }
+
+  private isPointerInsideVideoProgress(event: PointerEvent): boolean {
+    if (!this.videoProgressEl) {
+      return false;
+    }
+
+    const rect = this.videoProgressEl.getBoundingClientRect();
+    return event.clientX >= rect.left
+      && event.clientX <= rect.right
+      && event.clientY >= rect.top
+      && event.clientY <= rect.bottom;
   }
 
   private seekVideoByStep(seconds: number): void {
@@ -1197,6 +1269,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
       if (this.videoProgressEl) {
         this.videoProgressEl.style.setProperty("--og-video-progress", "0");
         this.videoProgressEl.setAttribute("aria-valuenow", "0");
+        this.videoProgressEl.setAttribute("aria-valuetext", "00:00");
       }
       return;
     }
@@ -1204,6 +1277,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     const progress = Math.round((videoEl.currentTime / videoEl.duration) * 1000);
     this.videoProgressEl.style.setProperty("--og-video-progress", String(progress / 1000));
     this.videoProgressEl.setAttribute("aria-valuenow", String(progress));
+    this.videoProgressEl.setAttribute("aria-valuetext", formatVideoProgressTime(videoEl.currentTime));
   }
 
   private updateVideoControls(): void {
