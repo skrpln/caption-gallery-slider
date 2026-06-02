@@ -257,6 +257,11 @@ Scope:
   - pinch/trackpad zoom через browser wheel gesture;
   - hover-only кнопки `+` / `-` рядом с rotate для дискретного zoom;
   - four-way move cursor во время pan/zoom interaction.
+- Responsive overlay controls:
+  - normal: video controls, progress и crop controls в одной строке;
+  - compact popup: video buttons и crop controls в первой строке, progress ниже;
+  - ultra compact: video buttons, crop controls и progress в трёх строках;
+  - hidden: controls скрываются, если занимают больше `60%` viewport.
 - Документационная синхронизация:
   - актуализировать phase-документацию под фактический scope;
   - вынести крупные будущие фичи в backlog;

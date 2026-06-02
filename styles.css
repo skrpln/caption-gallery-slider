@@ -324,8 +324,8 @@
   user-select: none;
 }
 
-.og-gallery.is-crop-zooming .og-gallery__media-actions button,
-.og-gallery.is-crop-dragging .og-gallery__media-actions button {
+.og-gallery.is-crop-zooming .og-gallery__overlay-controls button,
+.og-gallery.is-crop-dragging .og-gallery__overlay-controls button {
   cursor: pointer !important;
 }
 
@@ -360,20 +360,24 @@
   transition: none;
 }
 
-.og-gallery__video-controls {
+.og-gallery__overlay-controls {
   position: absolute;
   z-index: 2;
-  right: calc(14px + (var(--og-media-button-size) * 3) + 20px);
-  bottom: 6px;
   left: 14px;
-  display: none;
-  flex-wrap: wrap;
-  align-items: center;
+  right: 14px;
+  bottom: 6px;
+  display: grid;
   gap: 6px;
-  min-height: var(--og-media-button-size);
   opacity: 0;
   pointer-events: none;
   transition: opacity 120ms ease;
+}
+
+.og-gallery__video-controls {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--og-media-button-size);
 }
 
 .og-gallery__video-controls.is-visible {
@@ -406,8 +410,8 @@
 
 .og-gallery__video-progress {
   position: relative;
-  flex: 999 1 180px;
-  min-width: min(180px, 100%);
+  display: none;
+  min-width: 0;
   height: var(--og-nav-thumb-height);
   margin: calc((var(--og-media-button-size) - var(--og-nav-thumb-height)) / 2) 0;
   border-radius: 999px;
@@ -415,6 +419,10 @@
   cursor: pointer;
   outline: none;
   opacity: 0.82;
+}
+
+.og-gallery__video-progress.is-visible {
+  display: block;
 }
 
 .og-gallery__video-progress-range {
@@ -540,25 +548,17 @@
 
 .og-gallery__viewport:hover button.og-gallery__fullscreen,
 .og-gallery__viewport:focus-within button.og-gallery__fullscreen,
-.og-gallery__viewport:hover .og-gallery__media-actions,
-.og-gallery__viewport:focus-within .og-gallery__media-actions,
-.og-gallery__viewport:hover .og-gallery__video-controls.is-visible,
-.og-gallery__viewport:focus-within .og-gallery__video-controls.is-visible {
+.og-gallery__viewport:hover .og-gallery__overlay-controls,
+.og-gallery__viewport:focus-within .og-gallery__overlay-controls {
   opacity: 0.82;
   pointer-events: auto;
 }
 
 .og-gallery__media-actions {
-  position: absolute;
-  z-index: 2;
-  right: 14px;
-  bottom: 6px;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 6px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 120ms ease;
 }
 
 .og-gallery button.og-gallery__crop-zoom,
@@ -587,7 +587,7 @@
   height: 15px;
 }
 
-.og-gallery__media-actions button {
+.og-gallery__overlay-controls button {
   opacity: 0.82 !important;
 }
 
@@ -595,9 +595,73 @@
   display: none !important;
 }
 
-.og-gallery__video-controls .og-gallery__video-progress {
-  order: 10;
-  max-width: 100%;
+.og-gallery__viewport--overlay-normal .og-gallery__overlay-controls {
+  grid-template-columns: auto minmax(180px, 1fr) auto;
+  grid-template-rows: var(--og-media-button-size);
+  align-items: center;
+}
+
+.og-gallery__viewport--overlay-normal .og-gallery__video-controls {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.og-gallery__viewport--overlay-normal .og-gallery__video-progress {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.og-gallery__viewport--overlay-normal .og-gallery__media-actions {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.og-gallery__viewport--overlay-compact .og-gallery__overlay-controls {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-rows: var(--og-media-button-size) var(--og-media-button-size);
+  align-items: center;
+}
+
+.og-gallery__viewport--overlay-compact .og-gallery__video-controls {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.og-gallery__viewport--overlay-compact .og-gallery__media-actions {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.og-gallery__viewport--overlay-compact .og-gallery__video-progress {
+  grid-column: 1 / 4;
+  grid-row: 2;
+}
+
+.og-gallery__viewport--overlay-ultra .og-gallery__overlay-controls {
+  grid-template-columns: 1fr;
+  grid-template-rows: var(--og-media-button-size) var(--og-media-button-size) var(--og-media-button-size);
+  align-items: center;
+}
+
+.og-gallery__viewport--overlay-ultra .og-gallery__video-controls {
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: start;
+}
+
+.og-gallery__viewport--overlay-ultra .og-gallery__media-actions {
+  grid-column: 1;
+  grid-row: 2;
+  justify-self: end;
+}
+
+.og-gallery__viewport--overlay-ultra .og-gallery__video-progress {
+  grid-column: 1;
+  grid-row: 3;
+}
+
+.og-gallery__viewport--overlay-hidden .og-gallery__overlay-controls {
+  display: none;
 }
 
 .og-gallery__arrow--previous {

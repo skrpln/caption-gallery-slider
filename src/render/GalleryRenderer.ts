@@ -1,4 +1,4 @@
-// Documentation: [[documentation/architecture]], [[documentation/phase-4-video]], [[documentation/widget-size-controls]], [[documentation/keyboard-navigation-backlog]], [[documentation/crop-controls]]
+// Documentation: [[documentation/architecture]], [[documentation/phase-4-video]], [[documentation/widget-size-controls]], [[documentation/keyboard-navigation-backlog]], [[documentation/crop-controls]], [[documentation/overlay-controls-layout]]
 
 import { MarkdownRenderChild, setIcon, setTooltip } from "obsidian";
 import type { GalleryConfig } from "../parser/galleryBlockParser";
@@ -28,6 +28,7 @@ import {
   setTooltipLabel,
 } from "./autoHidingTooltip";
 import type { GalleryCropKeyboardDirection, GalleryCropZoomDirection, GalleryKeyboardTarget } from "./keyboardNavigation";
+import { chooseOverlayControlsLayout, type OverlayControlsLayout } from "./overlayControlsLayout";
 import {
   clampVideoRangeEdge,
   formatVideoProgressTime,
@@ -104,6 +105,8 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   private captionOpenButtonEl: HTMLButtonElement | null = null;
   private captionState: CaptionState | null = null;
   private fullscreenButtonEl: HTMLButtonElement | null = null;
+  private overlayControlsEl: HTMLElement | null = null;
+  private mediaActionsEl: HTMLElement | null = null;
   private rotateButtonEl: HTMLButtonElement | null = null;
   private zoomInButtonEl: HTMLButtonElement | null = null;
   private zoomOutButtonEl: HTMLButtonElement | null = null;
@@ -124,6 +127,8 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   private previewButtonEls: HTMLButtonElement[] = [];
   private navigationLayout: TopNavigationLayout = "dots";
   private navigationResizeObserver: ResizeObserver | null = null;
+  private overlayControlsResizeObserver: ResizeObserver | null = null;
+  private overlayControlsLayout: OverlayControlsLayout = "normal";
   private draggingNavigation = false;
   private draggingVideoProgress = false;
   private draggingVideoRangeEdge: VideoRangeEdge | null = null;
@@ -326,6 +331,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   private createMediaActions(): HTMLElement {
     const actionsEl = document.createElement("div");
     actionsEl.className = "og-gallery__media-actions";
+    this.mediaActionsEl = actionsEl;
     actionsEl.append(
       this.createCropZoomButton("in"),
       this.createCropZoomButton("out"),
@@ -470,8 +476,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     this.viewportEl = viewportEl;
 
     const fullscreenButton = this.createFullscreenButton();
-    const mediaActionsEl = this.createMediaActions();
-    const videoControlsEl = this.createVideoControls();
+    const overlayControlsEl = this.createOverlayControls();
     const resizeHandleEl = this.createResizeHandle("view_height");
 
     this.registerDomEvent(viewportEl, "pointerdown", (event: PointerEvent) => {
@@ -493,7 +498,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
         return;
       }
       if (event.target instanceof HTMLElement && event.target.closest(
-        "button, .og-gallery__video-controls, .og-gallery__nav",
+        "button, .og-gallery__overlay-controls, .og-gallery__nav",
       )) {
         return;
       }
@@ -525,7 +530,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
         return;
       }
 
-      if (event.target instanceof HTMLElement && event.target.closest(".og-gallery__video-controls")) {
+      if (event.target instanceof HTMLElement && event.target.closest(".og-gallery__overlay-controls")) {
         return;
       }
 
@@ -591,8 +596,30 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
       this.pointerStartX = null;
     });
 
-    viewportEl.append(videoControlsEl, fullscreenButton, mediaActionsEl, resizeHandleEl);
+    viewportEl.append(fullscreenButton, overlayControlsEl, resizeHandleEl);
+    this.observeOverlayControlsLayout();
     return viewportEl;
+  }
+
+  private createOverlayControls(): HTMLElement {
+    const overlayEl = document.createElement("div");
+    overlayEl.className = "og-gallery__overlay-controls";
+    this.overlayControlsEl = overlayEl;
+
+    this.registerDomEvent(overlayEl, "pointerdown", (event: PointerEvent) => {
+      event.stopPropagation();
+    });
+
+    this.registerDomEvent(overlayEl, "click", (event: MouseEvent) => {
+      event.stopPropagation();
+    });
+
+    overlayEl.append(
+      this.createVideoControls(),
+      this.createMediaActions(),
+      this.createVideoProgress(),
+    );
+    return overlayEl;
   }
 
   private createVideoControls(): HTMLElement {
@@ -611,6 +638,31 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     const playButtonEl = this.createVideoButton("play", "play");
     const muteButtonEl = this.createVideoButton("sound off", "volume-x");
     const loopButtonEl = this.createVideoButton("loop", "infinity");
+
+    this.videoPlayButtonEl = playButtonEl;
+    this.videoMuteButtonEl = muteButtonEl;
+    this.videoLoopButtonEl = loopButtonEl;
+
+    this.registerDomEvent(playButtonEl, "click", (event: MouseEvent) => {
+      event.preventDefault();
+      void this.toggleVideoPlayback();
+    });
+
+    this.registerDomEvent(muteButtonEl, "click", (event: MouseEvent) => {
+      event.preventDefault();
+      void this.toggleVideoMuted();
+    });
+
+    this.registerDomEvent(loopButtonEl, "click", (event: MouseEvent) => {
+      event.preventDefault();
+      void this.toggleVideoLoop();
+    });
+
+    controlsEl.append(playButtonEl, muteButtonEl, loopButtonEl);
+    return controlsEl;
+  }
+
+  private createVideoProgress(): HTMLElement {
     const progressEl = document.createElement("div");
     progressEl.className = "og-gallery__video-progress";
     progressEl.setAttribute("role", "slider");
@@ -641,29 +693,11 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     progressTooltipEl.textContent = "00:00";
     this.rootEl?.appendChild(progressTooltipEl);
 
-    this.videoPlayButtonEl = playButtonEl;
-    this.videoMuteButtonEl = muteButtonEl;
-    this.videoLoopButtonEl = loopButtonEl;
     this.videoProgressEl = progressEl;
     this.videoProgressRangeEl = progressRangeEl;
     this.videoProgressStartHandleEl = progressStartHandleEl;
     this.videoProgressEndHandleEl = progressEndHandleEl;
     this.videoProgressTooltipEl = progressTooltipEl;
-
-    this.registerDomEvent(playButtonEl, "click", (event: MouseEvent) => {
-      event.preventDefault();
-      void this.toggleVideoPlayback();
-    });
-
-    this.registerDomEvent(muteButtonEl, "click", (event: MouseEvent) => {
-      event.preventDefault();
-      void this.toggleVideoMuted();
-    });
-
-    this.registerDomEvent(loopButtonEl, "click", (event: MouseEvent) => {
-      event.preventDefault();
-      void this.toggleVideoLoop();
-    });
 
     this.registerVideoRangeHandle(progressStartHandleEl, "start");
     this.registerVideoRangeHandle(progressEndHandleEl, "end");
@@ -726,8 +760,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
       }
     });
 
-    controlsEl.append(playButtonEl, muteButtonEl, loopButtonEl, progressEl);
-    return controlsEl;
+    return progressEl;
   }
 
   private registerVideoRangeHandle(handleEl: HTMLElement, edge: VideoRangeEdge): void {
@@ -917,6 +950,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
       this.config.viewHeight = nextValue;
       this.rootEl?.style.setProperty("--og-view-height", `${nextValue}px`);
       this.applyRotation(this.currentRotation);
+      this.updateOverlayControlsLayout();
       return;
     }
 
@@ -979,6 +1013,47 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     });
   }
 
+  private observeOverlayControlsLayout(): void {
+    if (!this.viewportEl || typeof ResizeObserver === "undefined") {
+      this.updateOverlayControlsLayout();
+      return;
+    }
+
+    this.overlayControlsResizeObserver?.disconnect();
+    this.overlayControlsResizeObserver = new ResizeObserver(() => {
+      this.updateOverlayControlsLayout();
+    });
+    this.overlayControlsResizeObserver.observe(this.viewportEl);
+    this.register(() => {
+      this.overlayControlsResizeObserver?.disconnect();
+      this.overlayControlsResizeObserver = null;
+    });
+    this.updateOverlayControlsLayout();
+  }
+
+  private updateOverlayControlsLayout(): void {
+    if (!this.viewportEl) {
+      return;
+    }
+
+    const item = this.items[this.state.currentIndex];
+    const isVideo = item?.kind === "video";
+    const mediaActionCount = this.config.view === "crop" ? 3 : 1;
+    const nextLayout = isVideo
+      ? chooseOverlayControlsLayout({
+        viewportWidth: this.viewportEl.clientWidth,
+        viewportHeight: this.viewportEl.clientHeight,
+        videoButtonCount: 3,
+        mediaActionCount,
+      })
+      : "normal";
+
+    this.overlayControlsLayout = nextLayout;
+    for (const layout of ["normal", "compact", "ultra", "hidden"] as const) {
+      this.viewportEl.classList.toggle(`og-gallery__viewport--overlay-${layout}`, nextLayout === layout);
+    }
+  }
+
   private updateNavigationLayout(): void {
     if (!this.navEl) {
       return;
@@ -1035,6 +1110,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     this.hideVideoProgressTooltip();
     this.pauseCurrentVideo();
     this.ensureMediaElement(item);
+    this.updateOverlayControlsLayout();
     const resourcePath = this.getResourcePath(item.path);
     if (!resourcePath) {
       this.mediaEl?.removeAttribute("src");
@@ -1720,6 +1796,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     const videoEl = this.getCurrentVideoElement();
     const isVideo = Boolean(videoEl);
     this.videoControlsEl?.classList.toggle("is-visible", isVideo);
+    this.videoProgressEl?.classList.toggle("is-visible", isVideo);
 
     if (!videoEl) {
       return;
@@ -1809,7 +1886,7 @@ function cropKeyboardDelta(direction: GalleryCropKeyboardDirection): { x: number
 
 function isViewportControlTarget(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && Boolean(target.closest(
-    "button, .og-gallery__video-controls, .og-gallery__nav, .og-gallery__resize-handle",
+    "button, .og-gallery__overlay-controls, .og-gallery__nav, .og-gallery__resize-handle",
   ));
 }
 

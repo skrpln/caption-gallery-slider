@@ -49,6 +49,16 @@
 - Проверки crop controls пройдены: `npm test` — 72 теста, `npm run build` — успешно, `git diff --check` — без замечаний.
 - Собранный плагин обновлён в `/Users/nikita/Documents/Test Vault/.obsidian/plugins/obsidian-gallery`.
 - Ручная приемка оператором успешна: crop controls, WASD и `ArrowUp` / `ArrowDown` признаны корректными.
+- Добавлен responsive overlay controls layout для video/crop controls:
+  - `normal` — video buttons, progress и crop/rotate buttons в одной строке;
+  - `compact` — video buttons слева и crop/rotate buttons справа в первой строке, progress ниже;
+  - `ultra` — три строки: video buttons, crop/rotate buttons, progress;
+  - `hidden` — overlay controls скрываются, если занимают больше `60%` viewport или не помещаются по ширине.
+- Добавлен pure-helper `src/render/overlayControlsLayout.ts` и unit-тесты `src/render/overlayControlsLayout.test.ts`.
+- Добавлена документация [[documentation/overlay-controls-layout]]; обновлены [[documentation/_MOC]] и [[plan]].
+- Проверки overlay controls layout пройдены: `npm test` — 77 тестов, `npm run build` — успешно.
+- Собранный плагин обновлён в `/Users/nikita/Documents/Test Vault/.obsidian/plugins/obsidian-gallery`.
+- Ручная приемка оператором успешна: responsive overlay controls layout в popup признан корректным.
 
 Осталось:
 - Продолжить Phase 5 как стабилизацию текущего single-slide scope: regression fixes, fullscreen polish, video/caption/top navigation polish и синхронизация документации.
@@ -181,6 +191,10 @@
 # Log
 
 ## Phase 5 — Corrections and Pre-release Improvements
+
+### 2026-06-03 04:52 — Overlay Controls Layout
+
+Сессия завершена результативно: video controls, crop/rotate controls и progress объединены в responsive overlay layout с режимами `normal`, `compact`, `ultra` и `hidden`; popup-поведение принято оператором. Подробности: [[log/2026-06-03_04-52_overlay-controls-layout]].
 
 ### 2026-06-03 04:04 — Manual Crop Controls
 
