@@ -26,6 +26,9 @@ Phase 4 добавляет видео как полноценный `GalleryItem
 - Click по свободной области видео переключает play / pause; clicks по кнопкам, верхней навигации и progress rail не дублируют это действие.
 - Progress slider реализован как кастомный DOM rail с thumb того же размера и формы, что и верхний navigation rail. Track использует отдельный тёмно-серый цвет, чтобы не сливаться с thumb. Slider пишет только `currentTime` текущего `<video>` и не сохраняется в caption frontmatter.
 - Hover по progress rail показывает локальный DOM-tooltip с временем в формате `mm:ss`, вычисленным по позиции курсора. Tooltip позиционируется относительно `.og-gallery`, поэтому работает и когда root открыт через fullscreen API.
+- Видео может отображать ограниченный фрагмент через caption frontmatter `start` и `end` в секундах. Если значения отсутствуют, используется полный duration.
+- Левый и правый край progress rail работают как drag handles. При перетаскивании выбранный серый диапазон сужается или расширяется, tooltip показывает время активного края, а новые `start`/`end` сохраняются в caption note после отпускания указателя.
+- Seek, keyboard step и playback ограничены выбранным диапазоном. `loop` не использует native `video.loop`: renderer возвращает playback к `start`, когда текущее время достигает `end`.
 - В `navigation: preview` видео отображается как metadata-preloaded thumbnail с первым кадром (`#t=0.001`) и play-marker поверх кадра.
 
 ## Playback frontmatter
@@ -36,6 +39,8 @@ Caption frontmatter для видео может содержать:
 autoplay: false
 muted: true
 loop: true
+start: 12
+end: 42.5
 ```
 
 Правила:
@@ -44,6 +49,7 @@ loop: true
 - Переключение play / pause сохраняет `autoplay`.
 - Переключение mute / unmute сохраняет `muted`.
 - Переключение loop сохраняет `loop`.
+- Перетаскивание edge handles сохраняет `start` и `end`.
 - Если caption-заметки ещё нет, первое изменение playback state создаёт её через тот же lazy creation path, что и подписи.
 - `rotation` остаётся общей настройкой для изображений и видео.
 
@@ -53,5 +59,5 @@ loop: true
 
 - media resolver распознаёт видео как `kind: "video"`;
 - caption Markdown создаёт video playback frontmatter;
-- boolean frontmatter helpers читают и обновляют `autoplay`, `muted`, `loop`.
-- video progress helper форматирует hover time и ограничивает pointer-position внутри rail.
+- frontmatter helpers читают и обновляют `autoplay`, `muted`, `loop`, `start`, `end`;
+- video progress helper форматирует hover time, ограничивает pointer-position внутри rail и не даёт range edges пересекаться.

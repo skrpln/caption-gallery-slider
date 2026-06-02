@@ -18,7 +18,14 @@ import {
   setTooltipLabel,
 } from "./autoHidingTooltip";
 import type { GalleryKeyboardTarget } from "./keyboardNavigation";
-import { formatVideoProgressTime, videoProgressPointerTime } from "./videoProgressTime";
+import {
+  clampVideoRangeEdge,
+  formatVideoProgressTime,
+  normalizeVideoTimeRange,
+  videoProgressPointerTime,
+  videoTimeToProgress,
+  type VideoTimeRange,
+} from "./videoProgressTime";
 
 export interface GalleryRendererOptions {
   config: GalleryConfig;
@@ -46,6 +53,8 @@ interface GalleryResizeState {
   startY: number;
   startHeight: number;
 }
+
+type VideoRangeEdge = "start" | "end";
 
 const MIN_VIEW_HEIGHT = 120;
 const MIN_CAPTION_HEIGHT = 28;
@@ -79,6 +88,9 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   private videoMuteButtonEl: HTMLButtonElement | null = null;
   private videoLoopButtonEl: HTMLButtonElement | null = null;
   private videoProgressEl: HTMLElement | null = null;
+  private videoProgressRangeEl: HTMLElement | null = null;
+  private videoProgressStartHandleEl: HTMLElement | null = null;
+  private videoProgressEndHandleEl: HTMLElement | null = null;
   private videoProgressTooltipEl: HTMLElement | null = null;
   private navEl: HTMLElement | null = null;
   private navRailEl: HTMLElement | null = null;
@@ -89,6 +101,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   private navigationResizeObserver: ResizeObserver | null = null;
   private draggingNavigation = false;
   private draggingVideoProgress = false;
+  private draggingVideoRangeEdge: VideoRangeEdge | null = null;
   private pointerStartX: number | null = null;
   private lastWheelNavigationAt = 0;
   private currentRotation = 0;
@@ -499,9 +512,17 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     progressLabelEl.className = "og-gallery__visually-hidden";
     progressLabelEl.textContent = "video position";
     progressEl.setAttribute("aria-labelledby", progressLabelEl.id);
+    const progressRangeEl = document.createElement("div");
+    progressRangeEl.className = "og-gallery__video-progress-range";
+    const progressStartHandleEl = document.createElement("div");
+    progressStartHandleEl.className = "og-gallery__video-range-handle og-gallery__video-range-handle--start";
+    progressStartHandleEl.dataset.edge = "start";
+    const progressEndHandleEl = document.createElement("div");
+    progressEndHandleEl.className = "og-gallery__video-range-handle og-gallery__video-range-handle--end";
+    progressEndHandleEl.dataset.edge = "end";
     const progressThumbEl = document.createElement("div");
     progressThumbEl.className = "og-gallery__video-progress-thumb";
-    progressEl.append(progressLabelEl, progressThumbEl);
+    progressEl.append(progressLabelEl, progressRangeEl, progressStartHandleEl, progressEndHandleEl, progressThumbEl);
     const progressTooltipEl = document.createElement("div");
     progressTooltipEl.className = "og-gallery__video-time-tooltip";
     progressTooltipEl.textContent = "00:00";
@@ -511,6 +532,9 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     this.videoMuteButtonEl = muteButtonEl;
     this.videoLoopButtonEl = loopButtonEl;
     this.videoProgressEl = progressEl;
+    this.videoProgressRangeEl = progressRangeEl;
+    this.videoProgressStartHandleEl = progressStartHandleEl;
+    this.videoProgressEndHandleEl = progressEndHandleEl;
     this.videoProgressTooltipEl = progressTooltipEl;
 
     this.registerDomEvent(playButtonEl, "click", (event: MouseEvent) => {
@@ -527,6 +551,9 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
       event.preventDefault();
       void this.toggleVideoLoop();
     });
+
+    this.registerVideoRangeHandle(progressStartHandleEl, "start");
+    this.registerVideoRangeHandle(progressEndHandleEl, "end");
 
     this.registerDomEvent(progressEl, "pointerdown", (event: PointerEvent) => {
       event.preventDefault();
@@ -588,6 +615,50 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
 
     controlsEl.append(playButtonEl, muteButtonEl, loopButtonEl, progressEl);
     return controlsEl;
+  }
+
+  private registerVideoRangeHandle(handleEl: HTMLElement, edge: VideoRangeEdge): void {
+    this.registerDomEvent(handleEl, "pointerdown", (event: PointerEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      this.draggingVideoRangeEdge = edge;
+      handleEl.setPointerCapture(event.pointerId);
+      this.updateVideoRangeEdgeFromPointer(edge, event);
+    });
+
+    this.registerDomEvent(handleEl, "pointermove", (event: PointerEvent) => {
+      if (this.draggingVideoRangeEdge !== edge) {
+        return;
+      }
+
+      event.preventDefault();
+      this.updateVideoRangeEdgeFromPointer(edge, event);
+    });
+
+    this.registerDomEvent(handleEl, "pointerup", (event: PointerEvent) => {
+      if (this.draggingVideoRangeEdge === edge) {
+        event.preventDefault();
+        this.updateVideoRangeEdgeFromPointer(edge, event);
+        this.draggingVideoRangeEdge = null;
+        void this.persistVideoPlayback(this.currentPlayback);
+      }
+
+      if (handleEl.hasPointerCapture(event.pointerId)) {
+        handleEl.releasePointerCapture(event.pointerId);
+      }
+    });
+
+    this.registerDomEvent(handleEl, "pointercancel", (event: PointerEvent) => {
+      if (this.draggingVideoRangeEdge === edge) {
+        this.draggingVideoRangeEdge = null;
+        this.hideVideoProgressTooltip();
+        void this.persistVideoPlayback(this.currentPlayback);
+      }
+
+      if (handleEl.hasPointerCapture(event.pointerId)) {
+        handleEl.releasePointerCapture(event.pointerId);
+      }
+    });
   }
 
   private createVideoButton(label: string, icon: string): HTMLButtonElement {
@@ -926,8 +997,11 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     videoEl.controls = false;
     videoEl.playsInline = true;
 
-    this.registerDomEvent(videoEl, "timeupdate", () => this.updateVideoProgress());
-    this.registerDomEvent(videoEl, "durationchange", () => this.updateVideoProgress());
+    this.registerDomEvent(videoEl, "timeupdate", () => this.handleVideoTimeUpdate());
+    this.registerDomEvent(videoEl, "durationchange", () => {
+      this.syncVideoToPlaybackRange(videoEl);
+      this.updateVideoProgress();
+    });
     this.registerDomEvent(videoEl, "play", () => this.updateVideoControls());
     this.registerDomEvent(videoEl, "pause", () => this.updateVideoControls());
     this.registerDomEvent(videoEl, "ended", () => this.updateVideoControls());
@@ -1128,7 +1202,8 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     }
 
     videoEl.muted = playback.muted;
-    videoEl.loop = playback.loop;
+    videoEl.loop = false;
+    this.syncVideoToPlaybackRange(videoEl);
     if (playback.autoplay) {
       void videoEl.play().catch(() => {
         this.updateVideoControls();
@@ -1146,6 +1221,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     }
 
     if (videoEl.paused) {
+      this.syncVideoToPlaybackRange(videoEl);
       await videoEl.play().catch(() => undefined);
       await this.persistVideoPlayback({ ...this.currentPlayback, autoplay: true });
     } else {
@@ -1174,8 +1250,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
       return;
     }
 
-    const playback = { ...this.currentPlayback, loop: !videoEl.loop };
-    videoEl.loop = playback.loop;
+    const playback = { ...this.currentPlayback, loop: !this.currentPlayback.loop };
     await this.persistVideoPlayback(playback);
     this.updateVideoControls();
   }
@@ -1207,11 +1282,40 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     }
 
     const rect = this.videoProgressEl.getBoundingClientRect();
-    videoEl.currentTime = videoProgressPointerTime(event.clientX, rect.left, rect.width, videoEl.duration);
+    const range = this.getCurrentVideoRange(videoEl);
+    const pointerTime = videoProgressPointerTime(event.clientX, rect.left, rect.width, videoEl.duration);
+    videoEl.currentTime = clamp(pointerTime, range.start, range.end);
     this.updateVideoProgress();
   }
 
-  private updateVideoProgressTooltip(event: PointerEvent): void {
+  private updateVideoRangeEdgeFromPointer(edge: VideoRangeEdge, event: PointerEvent): void {
+    const videoEl = this.getCurrentVideoElement();
+    if (!videoEl || !this.videoProgressEl || !Number.isFinite(videoEl.duration) || videoEl.duration <= 0) {
+      this.hideVideoProgressTooltip();
+      return;
+    }
+
+    const rect = this.videoProgressEl.getBoundingClientRect();
+    const currentRange = this.getCurrentVideoRange(videoEl);
+    const pointerTime = videoProgressPointerTime(event.clientX, rect.left, rect.width, videoEl.duration);
+    const edgeTime = clampVideoRangeEdge(edge, pointerTime, currentRange, videoEl.duration);
+    const nextPlayback: CaptionVideoPlayback = {
+      ...this.currentPlayback,
+      [edge]: edgeTime,
+    };
+    const nextRange = normalizeVideoTimeRange(videoEl.duration, nextPlayback.start, nextPlayback.end);
+
+    this.currentPlayback = {
+      ...nextPlayback,
+      start: nextRange.start,
+      end: nextRange.end,
+    };
+    videoEl.currentTime = clamp(videoEl.currentTime, nextRange.start, nextRange.end);
+    this.updateVideoProgress();
+    this.updateVideoProgressTooltip(event, edgeTime);
+  }
+
+  private updateVideoProgressTooltip(event: PointerEvent, explicitTime?: number): void {
     const videoEl = this.getCurrentVideoElement();
     if (
       !videoEl
@@ -1227,7 +1331,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
 
     const railRect = this.videoProgressEl.getBoundingClientRect();
     const rootRect = this.rootEl.getBoundingClientRect();
-    const time = videoProgressPointerTime(event.clientX, railRect.left, railRect.width, videoEl.duration);
+    const time = explicitTime ?? videoProgressPointerTime(event.clientX, railRect.left, railRect.width, videoEl.duration);
     const tooltipX = clamp(event.clientX - rootRect.left, 30, Math.max(30, rootRect.width - 30));
     const tooltipY = clamp(event.clientY - rootRect.top, 20, Math.max(20, rootRect.height - 6));
 
@@ -1259,8 +1363,53 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
       return;
     }
 
-    videoEl.currentTime = clamp(videoEl.currentTime + seconds, 0, videoEl.duration);
+    const range = this.getCurrentVideoRange(videoEl);
+    videoEl.currentTime = clamp(videoEl.currentTime + seconds, range.start, range.end);
     this.updateVideoProgress();
+  }
+
+  private handleVideoTimeUpdate(): void {
+    const videoEl = this.getCurrentVideoElement();
+    if (!videoEl || !Number.isFinite(videoEl.duration) || videoEl.duration <= 0) {
+      this.updateVideoProgress();
+      return;
+    }
+
+    const range = this.getCurrentVideoRange(videoEl);
+    if (videoEl.currentTime < range.start) {
+      videoEl.currentTime = range.start;
+    }
+
+    if (videoEl.currentTime >= range.end) {
+      if (this.currentPlayback.loop) {
+        videoEl.currentTime = range.start;
+        if (videoEl.paused) {
+          void videoEl.play().catch(() => undefined);
+        }
+      } else {
+        videoEl.currentTime = range.end;
+        if (!videoEl.paused) {
+          videoEl.pause();
+        }
+        if (this.currentPlayback.autoplay) {
+          void this.persistVideoPlayback({ ...this.currentPlayback, autoplay: false });
+        }
+      }
+    }
+
+    this.updateVideoProgress();
+  }
+
+  private syncVideoToPlaybackRange(videoEl: HTMLVideoElement): void {
+    if (!Number.isFinite(videoEl.duration) || videoEl.duration <= 0) {
+      return;
+    }
+
+    const range = this.getCurrentVideoRange(videoEl);
+    videoEl.currentTime = clamp(videoEl.currentTime, range.start, range.end);
+    if (videoEl.currentTime === 0 && range.start > 0) {
+      videoEl.currentTime = range.start;
+    }
   }
 
   private updateVideoProgress(): void {
@@ -1268,16 +1417,25 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     if (!videoEl || !this.videoProgressEl || !Number.isFinite(videoEl.duration) || videoEl.duration <= 0) {
       if (this.videoProgressEl) {
         this.videoProgressEl.style.setProperty("--og-video-progress", "0");
+        this.videoProgressEl.style.setProperty("--og-video-range-start", "0");
+        this.videoProgressEl.style.setProperty("--og-video-range-end", "1");
         this.videoProgressEl.setAttribute("aria-valuenow", "0");
         this.videoProgressEl.setAttribute("aria-valuetext", "00:00");
       }
       return;
     }
 
+    const range = this.getCurrentVideoRange(videoEl);
     const progress = Math.round((videoEl.currentTime / videoEl.duration) * 1000);
     this.videoProgressEl.style.setProperty("--og-video-progress", String(progress / 1000));
+    this.videoProgressEl.style.setProperty("--og-video-range-start", String(videoTimeToProgress(range.start, videoEl.duration)));
+    this.videoProgressEl.style.setProperty("--og-video-range-end", String(videoTimeToProgress(range.end, videoEl.duration)));
     this.videoProgressEl.setAttribute("aria-valuenow", String(progress));
     this.videoProgressEl.setAttribute("aria-valuetext", formatVideoProgressTime(videoEl.currentTime));
+  }
+
+  private getCurrentVideoRange(videoEl: HTMLVideoElement): VideoTimeRange {
+    return normalizeVideoTimeRange(videoEl.duration, this.currentPlayback.start, this.currentPlayback.end);
   }
 
   private updateVideoControls(): void {
@@ -1291,7 +1449,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
 
     const playing = !videoEl.paused && !videoEl.ended;
     const muted = videoEl.muted;
-    const loop = videoEl.loop;
+    const loop = this.currentPlayback.loop;
 
     this.videoPlayButtonEl?.empty();
     this.videoMuteButtonEl?.empty();
