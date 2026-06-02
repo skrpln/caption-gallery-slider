@@ -25,6 +25,7 @@ Phase 4 добавляет видео как полноценный `GalleryItem
 - Если ширины viewport не хватает, progress slider переносится на вторую строку, а video-кнопки остаются первым рядом.
 - Click по свободной области видео переключает play / pause; clicks по кнопкам, верхней навигации и progress rail не дублируют это действие.
 - Progress slider реализован как кастомный DOM rail с thumb того же размера и формы, что и верхний navigation rail. Track использует отдельный тёмно-серый цвет, чтобы не сливаться с thumb. Slider пишет только `currentTime` текущего `<video>` и не сохраняется в caption frontmatter.
+- Hover по progress rail показывает локальный DOM-tooltip с временем в формате `mm:ss`, вычисленным по позиции курсора. Tooltip позиционируется относительно `.og-gallery`, поэтому работает и когда root открыт через fullscreen API.
 - В `navigation: preview` видео отображается как metadata-preloaded thumbnail с первым кадром (`#t=0.001`) и play-marker поверх кадра.
 
 ## Playback frontmatter
@@ -53,3 +54,4 @@ loop: true
 - media resolver распознаёт видео как `kind: "video"`;
 - caption Markdown создаёт video playback frontmatter;
 - boolean frontmatter helpers читают и обновляют `autoplay`, `muted`, `loop`.
+- video progress helper форматирует hover time и ограничивает pointer-position внутри rail.
