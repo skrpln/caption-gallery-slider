@@ -65,6 +65,7 @@
 .og-gallery button.og-gallery__fullscreen,
 .og-gallery button.og-gallery__arrow,
 .og-gallery button.og-gallery__caption-open,
+.og-gallery button.og-gallery__crop-zoom,
 .og-gallery button.og-gallery__rotate,
 .og-gallery button.og-gallery__video-button {
   appearance: none;
@@ -312,12 +313,29 @@
   user-select: none;
 }
 
+.og-gallery.is-crop-zooming .og-gallery__viewport,
+.og-gallery.is-crop-zooming .og-gallery__media {
+  cursor: move !important;
+}
+
+.og-gallery.is-crop-dragging .og-gallery__viewport,
+.og-gallery.is-crop-dragging .og-gallery__media {
+  cursor: grabbing !important;
+  user-select: none;
+}
+
+.og-gallery.is-crop-zooming .og-gallery__media-actions button,
+.og-gallery.is-crop-dragging .og-gallery__media-actions button {
+  cursor: pointer !important;
+}
+
 .og-gallery__viewport:focus-visible {
   box-shadow: inset 0 0 0 2px var(--interactive-accent);
 }
 
 .og-gallery__media {
   --og-media-rotation: 0deg;
+  --og-media-crop-zoom: 1;
 
   position: absolute;
   top: 50%;
@@ -325,8 +343,10 @@
   width: 100%;
   height: 100%;
   display: block;
+  -webkit-user-drag: none;
+  user-select: none;
   object-position: center;
-  transform: translate(-50%, -50%) rotate(var(--og-media-rotation));
+  transform: translate(-50%, -50%) rotate(var(--og-media-rotation)) scale(var(--og-media-crop-zoom));
   transform-origin: center;
   transition: transform 140ms ease;
 }
@@ -336,10 +356,14 @@
   height: var(--og-media-box-height, 100%);
 }
 
+.og-gallery.is-crop-dragging .og-gallery__media {
+  transition: none;
+}
+
 .og-gallery__video-controls {
   position: absolute;
   z-index: 2;
-  right: calc(14px + var(--og-media-button-size) + 8px);
+  right: calc(14px + (var(--og-media-button-size) * 3) + 20px);
   bottom: 6px;
   left: 14px;
   display: none;
@@ -476,7 +500,9 @@
 
 .og-gallery button.og-gallery__fullscreen:hover,
 .og-gallery button.og-gallery__arrow:hover,
+.og-gallery button.og-gallery__crop-zoom:hover,
 .og-gallery button.og-gallery__rotate:hover,
+.og-gallery button.og-gallery__crop-zoom:focus-visible,
 .og-gallery button.og-gallery__video-button:hover,
 .og-gallery button.og-gallery__video-button:focus-visible,
 .og-gallery__video-progress:focus-visible .og-gallery__video-progress-thumb,
@@ -487,6 +513,8 @@
 
 .og-gallery button.og-gallery__fullscreen:hover,
 .og-gallery button.og-gallery__fullscreen:focus-visible,
+.og-gallery button.og-gallery__crop-zoom:hover,
+.og-gallery button.og-gallery__crop-zoom:focus-visible,
 .og-gallery button.og-gallery__rotate:hover,
 .og-gallery button.og-gallery__rotate:focus-visible,
 .og-gallery button.og-gallery__video-button:hover,
@@ -502,6 +530,8 @@
 
 .og-gallery button.og-gallery__fullscreen:hover,
 .og-gallery button.og-gallery__fullscreen:focus-visible,
+.og-gallery button.og-gallery__crop-zoom:hover,
+.og-gallery button.og-gallery__crop-zoom:focus-visible,
 .og-gallery button.og-gallery__rotate:hover,
 .og-gallery button.og-gallery__rotate:focus-visible {
   color: var(--text-normal);
@@ -510,19 +540,29 @@
 
 .og-gallery__viewport:hover button.og-gallery__fullscreen,
 .og-gallery__viewport:focus-within button.og-gallery__fullscreen,
-.og-gallery__viewport:hover button.og-gallery__rotate,
-.og-gallery__viewport:focus-within button.og-gallery__rotate,
+.og-gallery__viewport:hover .og-gallery__media-actions,
+.og-gallery__viewport:focus-within .og-gallery__media-actions,
 .og-gallery__viewport:hover .og-gallery__video-controls.is-visible,
 .og-gallery__viewport:focus-within .og-gallery__video-controls.is-visible {
   opacity: 0.82;
   pointer-events: auto;
 }
 
-.og-gallery button.og-gallery__rotate {
+.og-gallery__media-actions {
   position: absolute;
   z-index: 2;
   right: 14px;
   bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.og-gallery button.og-gallery__crop-zoom,
+.og-gallery button.og-gallery__rotate {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -535,8 +575,24 @@
   font-size: 17px;
   line-height: 1;
   opacity: 0;
-  pointer-events: none;
   transition: background-color 120ms ease, opacity 120ms ease, color 120ms ease;
+}
+
+.og-gallery button.og-gallery__crop-zoom {
+  font-size: 14px;
+}
+
+.og-gallery button.og-gallery__crop-zoom svg {
+  width: 15px;
+  height: 15px;
+}
+
+.og-gallery__media-actions button {
+  opacity: 0.82 !important;
+}
+
+.og-gallery--view-fit .og-gallery__crop-zoom {
+  display: none !important;
 }
 
 .og-gallery__video-controls .og-gallery__video-progress {
