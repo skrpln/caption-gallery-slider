@@ -104,7 +104,7 @@ Allowed runtime values are normalized to `0`, `90`, `180`, or `270` through modu
 
 - click opens the link through `app.workspace.openLinkText`;
 - mouseover triggers `hover-link`;
-- `source` uses the registered `obsidian-gallery-caption` hover source;
+- `source` uses the registered `caption-gallery-slider-caption` hover source;
 - `hoverParent` is the gallery component, so popovers follow the gallery lifecycle.
 
 This is required because Obsidian does not automatically attach Reading mode link handlers inside custom gallery DOM.

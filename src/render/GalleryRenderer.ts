@@ -1247,7 +1247,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
       this.captionEl.classList.add("is-disabled", "is-empty");
       this.captionContentEl.empty();
       appendEmphasisLine(this.captionContentEl, "choose directory for gallery captions storage");
-      appendEmphasisLine(this.captionContentEl, "Settings > Community plugins > Obsidian Gallery > Caption folder");
+      appendEmphasisLine(this.captionContentEl, "Settings > Community plugins > Caption Gallery Slider > Caption folder");
       return;
     }
 

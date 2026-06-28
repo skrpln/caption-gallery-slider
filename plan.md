@@ -285,33 +285,72 @@ Scope:
 
 Цель: подготовить плагин к open-source публикации и каталогу community plugins без добавления новых крупных фич.
 
+Принятое публичное имя: `Caption Gallery Slider`.
+
+Принятый plugin id: `caption-gallery-slider`.
+
+Публичный автор в каталоге: `skrpln`, `authorUrl: https://github.com/skrpln`.
+
 Scope:
-- README для пользователя.
-- Документация синтаксиса.
-- Settings tab.
+- Publication identity:
+  - заменить старое публичное имя `Obsidian Gallery` на `Caption Gallery Slider`;
+  - заменить `manifest.id` на `caption-gallery-slider`, потому что Obsidian запрещает `obsidian` в plugin id;
+  - синхронизировать `manifest.json`, `package.json`, README и user-facing тексты;
+  - после файловых правок оператор переименовывает GitHub repository в `caption-gallery-slider`, чтобы публичный URL совпадал с именем и id.
+- Required repository files:
+  - `README.md` с понятным описанием назначения, синтаксиса, установки и ограничений;
+  - `LICENSE` MIT;
+  - `manifest.json` с корректными `id`, `name`, `description`, `author`, `authorUrl`, `version`, `minAppVersion`, `isDesktopOnly`;
+  - `versions.json` для совместимости будущих версий;
+  - issue templates для bug report и feature request;
+  - release notes / changelog.
+- README and positioning:
+  - коротко объяснить value proposition: gallery code block, local images/videos, editable Markdown captions stored as ordinary notes;
+  - показать минимальный пример code block;
+  - описать caption notes, Markdown links, hover preview, video controls, crop/fit, navigation, fullscreen;
+  - добавить Installation, Manual install, BRAT beta, Features, Settings, Limitations, Known issues, Support;
+  - оставить место для GIF/video demo до публичной beta.
+- Release hygiene:
+  - проверить, что release tag совпадает с `manifest.json.version`;
+  - убедиться, что release assets включают `main.js`, `manifest.json`, `styles.css`;
+  - проверить, что собранный `main.js` актуален после `npm run build`;
+  - решить, хранить ли `main.js` в repository source или публиковать только как release asset.
 - Accessibility pass:
   - aria-labels;
   - focus states;
-  - keyboard navigation.
-  - Keyboard arrow navigation now uses a plugin-level active gallery target. Keep regression checks in Reading mode, Live Preview, fullscreen, and caption editing. Full notes: [[documentation/keyboard-navigation-backlog]].
+  - keyboard navigation;
+  - regression checks in Reading mode, Live Preview, fullscreen, and caption editing. Full notes: [[documentation/keyboard-navigation-backlog]].
 - Performance pass:
   - проверка галерей 100+ элементов;
   - lazy loading;
-  - минимизация DOM updates.
-- Packaging:
-  - version bump;
-  - release artifact;
-  - community plugin checklist.
-- Repository and publication readiness:
-  - проверить `manifest.json`;
-  - проверить `versions.json`, если нужен для релизного процесса;
-  - подготовить release notes;
-  - проверить требования Obsidian community plugins.
+  - минимизация DOM updates;
+  - оценка размера bundle.
+- Manual QA:
+  - fresh vault install;
+  - manual install from built files;
+  - BRAT install from GitHub release;
+  - light/dark themes and several community themes;
+  - Windows check;
+  - mobile check or explicit `isDesktopOnly: true` decision.
+- BRAT beta:
+  - подготовить инструкцию для тестеров;
+  - дать 3-10 пользователям проверить установку, README, нестандартные vault paths, captions, video, fullscreen, themes;
+  - собрать feedback и закрыть installation/documentation blockers.
+- Official submission:
+  - repository public;
+  - README and release complete;
+  - Issues enabled;
+  - GitHub description/topics/social preview заполнены оператором;
+  - Obsidian account linked with GitHub;
+  - submit через community.obsidian.md;
+  - отвечать на review feedback и при необходимости выпускать новую версию.
 
 Критерии приемки:
 - Плагин можно установить вручную в vault.
 - Пользователь может создать галерею по README без чтения исходников.
 - Нет известных blocking issues для публикации.
+- GitHub release содержит корректные install assets.
+- BRAT beta устанавливается из публичного release.
 
 ## Feature Backlog
 

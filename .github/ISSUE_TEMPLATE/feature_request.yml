@@ -1,0 +1,37 @@
+name: Feature request
+description: Suggest an improvement or new use case.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Use case
+      description: What are you trying to do in your vault?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the behavior you would like to see.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Optional. Mention workarounds or other plugins if relevant.
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Area
+      options:
+        - label: Gallery syntax
+        - label: Captions
+        - label: Navigation
+        - label: Video
+        - label: Mobile
+        - label: Performance
+        - label: Documentation

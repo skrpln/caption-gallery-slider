@@ -1,7 +1,7 @@
 {
-  "name": "obsidian-gallery",
+  "name": "caption-gallery-slider",
   "version": "0.1.0",
-  "description": "Native Obsidian gallery code block plugin.",
+  "description": "Native-feeling gallery slider for local images and videos with editable Markdown captions.",
   "main": "main.js",
   "type": "module",
   "scripts": {
@@ -13,17 +13,23 @@
   "keywords": [
     "obsidian",
     "obsidian-plugin",
-    "gallery"
+    "gallery",
+    "slider",
+    "carousel",
+    "captions",
+    "markdown",
+    "media",
+    "video"
   ],
-  "author": "Nikita",
+  "author": "skrpln",
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^20.11.30",
     "builtin-modules": "^3.3.0",
-    "esbuild": "^0.20.2",
+    "esbuild": "^0.28.1",
     "obsidian": "^1.5.12",
     "tslib": "^2.6.2",
     "typescript": "^5.4.2",
-    "vitest": "^1.4.0"
+    "vitest": "^4.1.9"
   }
 }

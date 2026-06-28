@@ -17,7 +17,7 @@ import {
   type GalleryKeyboardTarget,
 } from "./render/keyboardNavigation";
 
-const HOVER_SOURCE_ID = "obsidian-gallery-caption";
+const HOVER_SOURCE_ID = "caption-gallery-slider-caption";
 
 export default class ObsidianGalleryPlugin extends Plugin {
   settings: ObsidianGallerySettings = DEFAULT_SETTINGS;
@@ -60,7 +60,7 @@ export default class ObsidianGalleryPlugin extends Plugin {
           try {
             currentSource = await updateGalleryBlockSizeOption(this.app, ctx, el, currentSource, option, value);
           } catch {
-            new Notice("Obsidian Gallery: cannot update gallery size in the note.");
+            new Notice("Caption Gallery Slider: cannot update gallery size in the note.");
           }
         },
         renderCaptionMarkdown: (markdown, containerEl, sourcePath, component) =>
@@ -94,7 +94,7 @@ export default class ObsidianGalleryPlugin extends Plugin {
     };
 
     pluginWithHoverSource.registerHoverLinkSource?.(HOVER_SOURCE_ID, {
-      display: "Obsidian Gallery Caption",
+      display: "Caption Gallery Slider Caption",
       defaultMod: true,
     });
   }
@@ -229,7 +229,7 @@ function replaceEditorGallerySource(
     }, {
       line: sectionInfo.lineEnd,
       ch: 0,
-    }, "obsidian-gallery-resize");
+    }, "caption-gallery-slider-resize");
     return;
   }
 
@@ -239,7 +239,7 @@ function replaceEditorGallerySource(
   }, {
     line: sectionInfo.lineEnd,
     ch: endLine.length,
-  }, "obsidian-gallery-resize");
+  }, "caption-gallery-slider-resize");
 }
 
 function replaceVaultGallerySource(

@@ -1,0 +1,78 @@
+name: Bug report
+description: Report a reproducible problem with Caption Gallery Slider.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing Caption Gallery Slider. Please include enough detail to reproduce the issue in a small vault.
+  - type: input
+    id: plugin-version
+    attributes:
+      label: Plugin version
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: input
+    id: obsidian-version
+    attributes:
+      label: Obsidian version
+      placeholder: "1.8.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - macOS
+        - Windows
+        - Linux
+        - iOS
+        - Android
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Where does it happen?
+      multiple: true
+      options:
+        - Reading mode
+        - Live Preview
+        - Fullscreen
+        - Hover preview
+        - Plugin settings
+        - Installation
+        - Other
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include a minimal `gallery` code block when possible.
+      placeholder: |
+        1. Create a note with...
+        2. Add this gallery block...
+        3. Click...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console errors or screenshots
+      description: Drag screenshots here or paste console output if available.
+      render: text
