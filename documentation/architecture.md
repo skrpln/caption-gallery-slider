@@ -4,7 +4,7 @@ Related notes: [[plan]], [[expectation]], [[documentation/_MOC]]
 
 ## Goal
 
-`obsidian-gallery` should feel like a native Obsidian feature: small DOM surface, theme-aware styles, predictable behavior in Reading mode, Live Preview, and hover pop-ups.
+`caption-gallery-slider` should feel like a native Obsidian feature: small DOM surface, theme-aware styles, predictable behavior in Reading mode, Live Preview, and hover pop-ups.
 
 The first implementation should avoid a frontend framework. Plain TypeScript, Obsidian APIs, and small isolated modules are enough for the required UI and keep the bundle light.
 
@@ -84,7 +84,7 @@ Phase 2 must include a dedicated markdown integration helper, for example `rende
 - bind click events to `app.workspace.openLinkText(linktext, sourcePath, Keymap.isModEvent(evt))`;
 - bind mouseover events to `app.workspace.trigger("hover-link", { ... })`;
 - pass `hoverParent: component` so popovers follow the gallery lifecycle;
-- use a stable plugin hover source id, for example `obsidian-gallery-caption`;
+- use a stable plugin hover source id, for example `caption-gallery-slider-caption`;
 - register that source during plugin `onload()` via `registerHoverLinkSource`.
 
 This is required for captions to behave like normal Obsidian markdown inside a custom renderer. If hover preview fails during debugging, temporarily using `source: "preview"` can isolate whether the issue is source registration or event payload shape.

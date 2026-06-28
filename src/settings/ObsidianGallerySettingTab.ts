@@ -63,7 +63,7 @@ export class ObsidianGallerySettingTab extends PluginSettingTab {
     try {
       await ensureFolderPath(this.app.vault, path);
     } catch (error) {
-      new Notice(`Obsidian Gallery: cannot create caption folder "${path}".`);
+      new Notice(`Caption Gallery Slider: cannot create caption folder "${path}".`);
       console.error(error);
     }
   }
