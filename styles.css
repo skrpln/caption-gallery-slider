@@ -715,6 +715,7 @@
 .og-gallery__caption-content h4,
 .og-gallery__caption-content h5,
 .og-gallery__caption-content h6 {
+  min-height: 0;
   margin-block: 0;
   line-height: inherit;
 }

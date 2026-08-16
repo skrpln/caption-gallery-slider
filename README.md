@@ -4,7 +4,7 @@ Caption Gallery Slider is an Obsidian plugin for turning a fenced `gallery` code
 
 Its main idea is simple: keep media in your vault, keep captions as ordinary Markdown notes, and edit those captions directly inside the gallery.
 
-> Demo GIF and short videos will be added before the public beta announcement.
+This release is desktop only. The interface relies on hover controls and pointer input, so mobile support is planned for a later version, after dedicated touch testing.
 
 ## Features
 
@@ -145,7 +145,7 @@ If future remote media support is added, it will be documented clearly because r
 ## Limitations
 
 - The first public release focuses on single-slide galleries. Grid layouts are planned later.
-- Mobile support still needs dedicated testing before the official submission.
+- Desktop only for now. Several controls appear on hover, which needs a touch-friendly redesign before mobile support.
 - Captions are created only after the first edit, so an empty placeholder does not create files by itself.
 - Very large videos depend on Obsidian and the operating system media stack.
 

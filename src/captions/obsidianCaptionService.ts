@@ -1,6 +1,6 @@
 // Documentation: [[documentation/phase-2-captions]], [[documentation/phase-4-video]], [[documentation/crop-controls]]
 
-import { App, TFile, TFolder, type Vault } from "obsidian";
+import { App, normalizePath, TFile, TFolder, type Vault } from "obsidian";
 import type { GalleryItem } from "../media/mediaTypes";
 import type { GalleryConfig } from "../parser/galleryBlockParser";
 import { DEFAULT_CROP, type CaptionCrop } from "./captionCrop";
@@ -118,15 +118,16 @@ export class ObsidianCaptionService {
     }
 
     if (file) {
-      const markdown = await this.app.vault.read(file);
-      const { frontmatter } = splitCaptionMarkdown(markdown);
+      const nextMarkdown = await this.app.vault.process(file, (markdown) => {
+        const { frontmatter } = splitCaptionMarkdown(markdown);
+        return frontmatter === null
+          ? body
+          : `---\n${frontmatter}\n---\n${body}`;
+      });
+      const { frontmatter } = splitCaptionMarkdown(nextMarkdown);
       rotation = normalizeRotation(readFrontmatterNumber(frontmatter, "rotation", 0));
       crop = readCrop(frontmatter);
       playback = readVideoPlayback(frontmatter);
-      const nextMarkdown = frontmatter === null
-        ? body
-        : `---\n${frontmatter}\n---\n${body}`;
-      await this.app.vault.modify(file, nextMarkdown);
     }
 
     return {
@@ -166,14 +167,15 @@ export class ObsidianCaptionService {
     let crop = DEFAULT_CROP;
     let playback = DEFAULT_VIDEO_PLAYBACK;
     if (file) {
-      const markdown = await this.app.vault.read(file);
-      const parts = splitCaptionMarkdown(markdown);
+      const nextMarkdown = await this.app.vault.process(file, (markdown) => {
+        const parts = splitCaptionMarkdown(markdown);
+        const nextFrontmatter = upsertFrontmatterNumber(parts.frontmatter, "rotation", normalizedRotation);
+        return `---\n${nextFrontmatter}\n---\n${parts.body}`;
+      });
+      const parts = splitCaptionMarkdown(nextMarkdown);
       body = parts.body;
-      const { frontmatter } = parts;
-      crop = readCrop(frontmatter);
-      playback = readVideoPlayback(frontmatter);
-      const nextFrontmatter = upsertFrontmatterNumber(frontmatter, "rotation", normalizedRotation);
-      await this.app.vault.modify(file, `---\n${nextFrontmatter}\n---\n${body}`);
+      crop = readCrop(parts.frontmatter);
+      playback = readVideoPlayback(parts.frontmatter);
     }
 
     return {
@@ -214,14 +216,16 @@ export class ObsidianCaptionService {
     let playback = DEFAULT_VIDEO_PLAYBACK;
     let nextCrop = crop;
     if (file) {
-      const markdown = await this.app.vault.read(file);
-      const parts = splitCaptionMarkdown(markdown);
+      const nextMarkdown = await this.app.vault.process(file, (markdown) => {
+        const parts = splitCaptionMarkdown(markdown);
+        const nextFrontmatter = upsertCrop(parts.frontmatter, crop);
+        return `---\n${nextFrontmatter}\n---\n${parts.body}`;
+      });
+      const parts = splitCaptionMarkdown(nextMarkdown);
       body = parts.body;
       rotation = normalizeRotation(readFrontmatterNumber(parts.frontmatter, "rotation", 0));
       playback = readVideoPlayback(parts.frontmatter);
-      const nextFrontmatter = upsertCrop(parts.frontmatter, crop);
-      nextCrop = readCrop(nextFrontmatter);
-      await this.app.vault.modify(file, `---\n${nextFrontmatter}\n---\n${body}`);
+      nextCrop = readCrop(parts.frontmatter);
     }
 
     return {
@@ -264,13 +268,15 @@ export class ObsidianCaptionService {
     let rotation = 0;
     let crop = DEFAULT_CROP;
     if (file) {
-      const markdown = await this.app.vault.read(file);
-      const parts = splitCaptionMarkdown(markdown);
+      const nextMarkdown = await this.app.vault.process(file, (markdown) => {
+        const parts = splitCaptionMarkdown(markdown);
+        const nextFrontmatter = upsertVideoPlayback(parts.frontmatter, playback);
+        return `---\n${nextFrontmatter}\n---\n${parts.body}`;
+      });
+      const parts = splitCaptionMarkdown(nextMarkdown);
       body = parts.body;
       rotation = normalizeRotation(readFrontmatterNumber(parts.frontmatter, "rotation", 0));
       crop = readCrop(parts.frontmatter);
-      const nextFrontmatter = upsertVideoPlayback(parts.frontmatter, playback);
-      await this.app.vault.modify(file, `---\n${nextFrontmatter}\n---\n${body}`);
     }
 
     return {
@@ -307,11 +313,11 @@ export class ObsidianCaptionService {
       return null;
     }
 
-    return buildCaptionPath({
+    return normalizePath(buildCaptionPath({
       gallerySaveDir,
       galleryId: config.galleryId,
       item,
-    });
+    }));
   }
 }
 

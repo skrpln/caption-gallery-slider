@@ -1,6 +1,6 @@
 // Documentation: [[documentation/architecture]], [[documentation/widget-size-controls]], [[documentation/keyboard-navigation-backlog]], [[documentation/crop-controls]]
 
-import { Notice, Plugin, TFile, type App, type Editor, type MarkdownPostProcessorContext, type MarkdownSectionInformation } from "obsidian";
+import { Notice, Plugin, type App, type Editor, type MarkdownPostProcessorContext, type MarkdownSectionInformation } from "obsidian";
 import { createObsidianVaultAdapter, getObsidianResourcePath } from "./media/obsidianVaultAdapter";
 import { resolveGalleryMedia } from "./media/mediaResolver";
 import { parseGalleryBlock } from "./parser/galleryBlockParser";
@@ -152,10 +152,7 @@ export default class ObsidianGalleryPlugin extends Plugin {
       }
     };
 
-    document.addEventListener("keydown", handleKeydown, true);
-    this.register(() => {
-      document.removeEventListener("keydown", handleKeydown, true);
-    });
+    this.registerDomEvent(document, "keydown", handleKeydown, true);
   }
 }
 
@@ -170,15 +167,8 @@ function isTextEditingTarget(target: EventTarget | null): boolean {
 function renderInlineMessage(containerEl: HTMLElement, messages: string[]): void {
   containerEl.empty();
 
-  const root = document.createElement("div");
-  root.className = "og-gallery";
-
-  const messageEl = document.createElement("div");
-  messageEl.className = "og-gallery__message";
-  messageEl.textContent = messages.join(" ");
-
-  root.appendChild(messageEl);
-  containerEl.appendChild(root);
+  const root = containerEl.createDiv({ cls: "og-gallery" });
+  root.createDiv({ cls: "og-gallery__message", text: messages.join(" ") });
 }
 
 async function updateGalleryBlockSizeOption(
@@ -205,8 +195,8 @@ async function updateGalleryBlockSizeOption(
     return nextSource;
   }
 
-  const file = app.vault.getAbstractFileByPath(ctx.sourcePath);
-  if (!(file instanceof TFile)) {
+  const file = app.vault.getFileByPath(ctx.sourcePath);
+  if (!file) {
     throw new Error("Cannot locate gallery source note.");
   }
 
