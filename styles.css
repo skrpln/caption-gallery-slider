@@ -890,9 +890,9 @@
 
 .og-gallery__caption-content input.task-list-item-checkbox {
   position: relative;
-  top: 0;
+  top: 0.2em;
   margin-block: 0;
-  margin-inline-end: 0.4em;
-  vertical-align: middle;
+  margin-inline-end: 0.6em;
+  vertical-align: baseline;
   cursor: pointer;
 }

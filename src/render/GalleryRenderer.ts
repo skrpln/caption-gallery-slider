@@ -861,7 +861,6 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
         ? target.closest<HTMLInputElement>("input.task-list-item-checkbox")
         : null;
       if (checkboxEl) {
-        event.preventDefault();
         event.stopPropagation();
         void this.toggleCaptionTask(checkboxEl);
         return;
@@ -1303,15 +1302,17 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
       return;
     }
 
-    const checked = !checkboxEl.checked;
+    // The browser already applied the new state before this handler ran.
+    const checked = checkboxEl.checked;
     const body = toggleCaptionTask(this.captionState.body, taskIndex, checked);
     if (body === null) {
+      checkboxEl.checked = !checked;
       return;
     }
 
-    checkboxEl.checked = checked;
-    checkboxEl.setAttribute("data-task", checked ? "x" : " ");
-    checkboxEl.closest("li")?.classList.toggle("is-checked", checked);
+    const listItemEl = checkboxEl.closest("li");
+    listItemEl?.setAttribute("data-task", checked ? "x" : " ");
+    listItemEl?.classList.toggle("is-checked", checked);
 
     const token = (this.captionSaveToken += 1);
     const nextState = await this.saveCaption(item, body);
