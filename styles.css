@@ -688,11 +688,26 @@
   line-height: var(--og-caption-line-height);
 }
 
+.og-gallery__caption-probe {
+  position: absolute;
+  visibility: hidden;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
 .og-gallery__caption-content {
   /* Obsidian pads list items with --list-spacing. The caption keeps rendered
      lines the same height as the raw lines shown while editing. */
   --list-spacing: 0px;
 
+  /* Measured from a hidden Markdown paragraph, so caption text reads exactly
+     like note text in the active theme. */
+  font-size: var(--og-caption-text-size, var(--font-text-size));
+  /* Checkboxes follow the caption text instead of the note text size. */
+  --checkbox-size: var(--og-caption-text-size, var(--font-text-size));
+  font-family: var(--og-caption-text-family, inherit);
+  color: var(--og-caption-text-color, inherit);
   width: 100%;
   height: 100%;
   overflow: auto;

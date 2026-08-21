@@ -103,6 +103,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   private viewportEl: HTMLElement | null = null;
   private captionEl: HTMLElement | null = null;
   private captionContentEl: HTMLElement | null = null;
+  private captionProbeEl: HTMLElement | null = null;
   private captionOpenButtonEl: HTMLButtonElement | null = null;
   private captionState: CaptionState | null = null;
   private fullscreenButtonEl: HTMLButtonElement | null = null;
@@ -843,6 +844,15 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     contentEl.tabIndex = 0;
     this.captionContentEl = contentEl;
 
+    // A hidden Markdown paragraph. Themes are free to give Markdown paragraphs
+    // their own size, family, and colour, so the caption reads that styling
+    // from the theme instead of guessing it.
+    const probeEl = document.createElement("div");
+    probeEl.className = "og-gallery__caption-probe markdown-rendered";
+    probeEl.setAttribute("aria-hidden", "true");
+    probeEl.appendChild(document.createElement("p"));
+    this.captionProbeEl = probeEl;
+
     const openButtonEl = document.createElement("button");
     openButtonEl.type = "button";
     openButtonEl.className = "og-gallery__caption-open";
@@ -883,7 +893,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
       void this.openCurrentCaption();
     });
 
-    captionEl.append(contentEl, openButtonEl, resizeHandleEl);
+    captionEl.append(probeEl, contentEl, openButtonEl, resizeHandleEl);
     return captionEl;
   }
 
@@ -1215,7 +1225,24 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     return videoEl;
   }
 
+  private syncCaptionTypography(): void {
+    const paragraphEl = this.captionProbeEl?.querySelector("p");
+    if (!paragraphEl || !this.captionEl) {
+      return;
+    }
+
+    const styles = window.getComputedStyle(paragraphEl);
+    if (!styles.fontSize) {
+      return;
+    }
+
+    this.captionEl.style.setProperty("--og-caption-text-size", styles.fontSize);
+    this.captionEl.style.setProperty("--og-caption-text-family", styles.fontFamily);
+    this.captionEl.style.setProperty("--og-caption-text-color", styles.color);
+  }
+
   private async updateCaption(item: GalleryItem): Promise<void> {
+    this.syncCaptionTypography();
     const token = (this.captionRenderToken += 1);
     this.captionEditing = false;
     this.captionState = null;
