@@ -689,6 +689,10 @@
 }
 
 .og-gallery__caption-content {
+  /* Obsidian pads list items with --list-spacing. The caption keeps rendered
+     lines the same height as the raw lines shown while editing. */
+  --list-spacing: 0px;
+
   width: 100%;
   height: 100%;
   overflow: auto;
@@ -782,6 +786,23 @@
 
 .og-gallery__caption-content li {
   margin-block: 0;
+}
+
+/* Themes may style Markdown paragraphs with their own font size, family, or
+   colour. Inside the caption that would make rendered text differ from the
+   raw text shown while editing, so body blocks always inherit the panel font.
+   Headings keep the theme scale on purpose. */
+.og-gallery__caption-content p,
+.og-gallery__caption-content ul,
+.og-gallery__caption-content ol,
+.og-gallery__caption-content li,
+.og-gallery__caption-content blockquote,
+.og-gallery__caption-content .el-p,
+.og-gallery__caption-content .el-ul,
+.og-gallery__caption-content .el-ol {
+  font-size: inherit !important;
+  font-family: inherit !important;
+  color: inherit !important;
 }
 
 .og-gallery__caption-content > :first-child {
@@ -890,9 +911,10 @@
 
 .og-gallery__caption-content input.task-list-item-checkbox {
   position: relative;
-  top: 0.2em;
+  top: 0;
   margin-block: 0;
   margin-inline-end: 0.6em;
-  vertical-align: baseline;
+  /* Sits on the text row without making the line taller than a raw line. */
+  vertical-align: -0.15em;
   cursor: pointer;
 }
