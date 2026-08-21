@@ -881,3 +881,18 @@
   flex: 1 1 auto;
   height: auto;
 }
+
+/* Task lists inside captions behave like task lists in a normal note:
+   the checkbox stays on the text row and clicking it toggles the task. */
+.og-gallery__caption-content .task-list-item {
+  line-height: var(--og-caption-line-height);
+}
+
+.og-gallery__caption-content input.task-list-item-checkbox {
+  position: relative;
+  top: 0;
+  margin-block: 0;
+  margin-inline-end: 0.4em;
+  vertical-align: middle;
+  cursor: pointer;
+}

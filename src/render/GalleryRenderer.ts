@@ -7,6 +7,7 @@ import type { GalleryItem } from "../media/mediaTypes";
 import { createGalleryState, goToIndex, nextIndex, previousIndex, type GalleryState } from "../state/galleryState";
 import type { CaptionState } from "../captions/obsidianCaptionService";
 import { DEFAULT_VIDEO_PLAYBACK, type CaptionVideoPlayback } from "../captions/captionMarkdown";
+import { toggleCaptionTask } from "../captions/captionTasks";
 import {
   CROP_KEYBOARD_STEP,
   CROP_ZOOM_STEP,
@@ -856,6 +857,16 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
         return;
       }
 
+      const checkboxEl = target instanceof HTMLElement
+        ? target.closest<HTMLInputElement>("input.task-list-item-checkbox")
+        : null;
+      if (checkboxEl) {
+        event.preventDefault();
+        event.stopPropagation();
+        void this.toggleCaptionTask(checkboxEl);
+        return;
+      }
+
       this.startCaptionEditing();
     });
 
@@ -1272,6 +1283,43 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     }
 
     this.captionContentEl.textContent = caption.body;
+  }
+
+  private async toggleCaptionTask(checkboxEl: HTMLInputElement): Promise<void> {
+    const item = this.items[this.state.currentIndex];
+    if (this.captionEditing || !this.captionContentEl || !item || !this.saveCaption || !this.captionState) {
+      return;
+    }
+
+    if (this.captionState.status === "unconfigured") {
+      return;
+    }
+
+    const checkboxes = Array.from(
+      this.captionContentEl.querySelectorAll<HTMLInputElement>("input.task-list-item-checkbox"),
+    );
+    const taskIndex = checkboxes.indexOf(checkboxEl);
+    if (taskIndex < 0) {
+      return;
+    }
+
+    const checked = !checkboxEl.checked;
+    const body = toggleCaptionTask(this.captionState.body, taskIndex, checked);
+    if (body === null) {
+      return;
+    }
+
+    checkboxEl.checked = checked;
+    checkboxEl.setAttribute("data-task", checked ? "x" : " ");
+    checkboxEl.closest("li")?.classList.toggle("is-checked", checked);
+
+    const token = (this.captionSaveToken += 1);
+    const nextState = await this.saveCaption(item, body);
+    if (token !== this.captionSaveToken) {
+      return;
+    }
+
+    this.captionState = nextState;
   }
 
   private startCaptionEditing(): void {
