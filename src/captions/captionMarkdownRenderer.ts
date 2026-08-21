@@ -10,7 +10,7 @@ export async function renderCaptionMarkdown(
   component: Component,
   hoverSource: string,
 ): Promise<void> {
-  containerEl.classList.add("markdown-rendered");
+  containerEl.classList.add("markdown-preview-view", "markdown-rendered");
   await MarkdownRenderer.render(app, markdown, containerEl, sourcePath, component);
 
   containerEl.querySelectorAll<HTMLElement>("a.internal-link").forEach((linkEl) => {

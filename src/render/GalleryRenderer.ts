@@ -848,7 +848,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     // their own size, family, and colour, so the caption reads that styling
     // from the theme instead of guessing it.
     const probeEl = document.createElement("div");
-    probeEl.className = "og-gallery__caption-probe markdown-rendered";
+    probeEl.className = "og-gallery__caption-probe markdown-preview-view markdown-rendered";
     probeEl.setAttribute("aria-hidden", "true");
     probeEl.appendChild(document.createElement("p"));
     this.captionProbeEl = probeEl;
@@ -1239,16 +1239,18 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     this.captionEl.style.setProperty("--og-caption-text-size", styles.fontSize);
     this.captionEl.style.setProperty("--og-caption-text-family", styles.fontFamily);
     this.captionEl.style.setProperty("--og-caption-text-color", styles.color);
+    this.captionEl.style.setProperty("--og-caption-text-line-height", styles.lineHeight);
   }
 
   private async updateCaption(item: GalleryItem): Promise<void> {
     this.syncCaptionTypography();
+    window.requestAnimationFrame(() => this.syncCaptionTypography());
     const token = (this.captionRenderToken += 1);
     this.captionEditing = false;
     this.captionState = null;
     if (this.captionEl && this.captionContentEl) {
       this.captionContentEl.contentEditable = "false";
-      this.captionContentEl.classList.remove("markdown-rendered");
+      this.captionContentEl.classList.remove("markdown-preview-view", "markdown-rendered");
       this.captionContentEl.removeAttribute("data-placeholder");
       this.captionContentEl.empty();
       this.captionContentEl.textContent = "Loading caption...";
@@ -1364,7 +1366,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     this.captionEl.classList.add("is-editing");
     this.captionEl.classList.remove("is-empty");
     this.captionContentEl.contentEditable = "true";
-    this.captionContentEl.classList.remove("markdown-rendered");
+    this.captionContentEl.classList.remove("markdown-preview-view", "markdown-rendered");
     this.captionContentEl.empty();
     this.captionContentEl.textContent = this.captionState.body;
     this.captionContentEl.focus({ preventScroll: true });

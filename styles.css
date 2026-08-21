@@ -684,10 +684,11 @@
   border-radius: var(--radius-s);
   background: var(--background-primary);
   color: var(--text-normal);
-  font-size: var(--font-text-size);
-  line-height: var(--og-caption-line-height);
 }
 
+/* A hidden Markdown paragraph. The plugin reads its resolved typography and
+   reuses it while the caption is being edited, so raw Markdown is shown with
+   the same font as the rendered paragraphs above it. */
 .og-gallery__caption-probe {
   position: absolute;
   visibility: hidden;
@@ -696,18 +697,10 @@
   pointer-events: none;
 }
 
+/* The rendered caption is a note fragment: it carries the same classes as a
+   reading view, so the active theme styles it exactly like note content.
+   The plugin only trims the outer margins, because the panel is short. */
 .og-gallery__caption-content {
-  /* Obsidian pads list items with --list-spacing. The caption keeps rendered
-     lines the same height as the raw lines shown while editing. */
-  --list-spacing: 0px;
-
-  /* Measured from a hidden Markdown paragraph, so caption text reads exactly
-     like note text in the active theme. */
-  font-size: var(--og-caption-text-size, var(--font-text-size));
-  /* Checkboxes follow the caption text instead of the note text size. */
-  --checkbox-size: var(--og-caption-text-size, var(--font-text-size));
-  font-family: var(--og-caption-text-family, inherit);
-  color: var(--og-caption-text-color, inherit);
   width: 100%;
   height: 100%;
   overflow: auto;
@@ -715,113 +708,22 @@
   outline: none;
   white-space: normal;
   cursor: text;
-  line-height: var(--og-caption-line-height);
+}
+
+.og-gallery__caption-content > :first-child {
+  margin-top: 0 !important;
+}
+
+.og-gallery__caption-content > :last-child {
+  margin-bottom: 0 !important;
 }
 
 .og-gallery__caption.is-editing .og-gallery__caption-content {
   white-space: pre-wrap;
-  line-height: var(--og-caption-line-height);
-}
-
-.og-gallery__caption-content p,
-.og-gallery__caption-content ul,
-.og-gallery__caption-content ol,
-.og-gallery__caption-content blockquote,
-.og-gallery__caption-content pre,
-.og-gallery__caption-content h1,
-.og-gallery__caption-content h2,
-.og-gallery__caption-content h3,
-.og-gallery__caption-content h4,
-.og-gallery__caption-content h5,
-.og-gallery__caption-content h6 {
-  min-height: 0;
-  margin-block: 0;
-  line-height: inherit;
-}
-
-.og-gallery__caption-content > p,
-.og-gallery__caption-content > ul,
-.og-gallery__caption-content > ol,
-.og-gallery__caption-content > blockquote,
-.og-gallery__caption-content > pre,
-.og-gallery__caption-content > h1,
-.og-gallery__caption-content > h2,
-.og-gallery__caption-content > h3,
-.og-gallery__caption-content > h4,
-.og-gallery__caption-content > h5,
-.og-gallery__caption-content > h6,
-.og-gallery__caption-content.markdown-rendered p,
-.og-gallery__caption-content.markdown-rendered ul,
-.og-gallery__caption-content.markdown-rendered ol,
-.og-gallery__caption-content.markdown-rendered blockquote,
-.og-gallery__caption-content.markdown-rendered pre,
-.og-gallery__caption-content.markdown-rendered h1,
-.og-gallery__caption-content.markdown-rendered h2,
-.og-gallery__caption-content.markdown-rendered h3,
-.og-gallery__caption-content.markdown-rendered h4,
-.og-gallery__caption-content.markdown-rendered h5,
-.og-gallery__caption-content.markdown-rendered h6,
-.og-gallery__caption-content .markdown-rendered p,
-.og-gallery__caption-content .markdown-rendered ul,
-.og-gallery__caption-content .markdown-rendered ol,
-.og-gallery__caption-content .markdown-rendered blockquote,
-.og-gallery__caption-content .markdown-rendered pre,
-.og-gallery__caption-content .markdown-rendered h1,
-.og-gallery__caption-content .markdown-rendered h2,
-.og-gallery__caption-content .markdown-rendered h3,
-.og-gallery__caption-content .markdown-rendered h4,
-.og-gallery__caption-content .markdown-rendered h5,
-.og-gallery__caption-content .markdown-rendered h6 {
-  margin-block: 0 !important;
-  line-height: var(--og-caption-line-height) !important;
-}
-
-.og-gallery__caption-content.markdown-rendered p + p,
-.og-gallery__caption-content .markdown-rendered p + p {
-  margin-top: 0 !important;
-}
-
-.og-gallery__caption-content.markdown-rendered .markdown-preview-section,
-.og-gallery__caption-content.markdown-rendered .markdown-preview-section > div,
-.og-gallery__caption-content.markdown-rendered .el-p,
-.og-gallery__caption-content.markdown-rendered .el-ul,
-.og-gallery__caption-content.markdown-rendered .el-ol,
-.og-gallery__caption-content.markdown-rendered .el-blockquote,
-.og-gallery__caption-content.markdown-rendered .el-pre,
-.og-gallery__caption-content.markdown-rendered .el-h1,
-.og-gallery__caption-content.markdown-rendered .el-h2,
-.og-gallery__caption-content.markdown-rendered .el-h3,
-.og-gallery__caption-content.markdown-rendered .el-h4,
-.og-gallery__caption-content.markdown-rendered .el-h5,
-.og-gallery__caption-content.markdown-rendered .el-h6 {
-  min-height: 0 !important;
-  margin-block: 0 !important;
-  line-height: var(--og-caption-line-height) !important;
-}
-
-.og-gallery__caption-content li {
-  margin-block: 0;
-}
-
-/* Themes may style Markdown paragraphs with their own font size, family, or
-   colour. Inside the caption that would make rendered text differ from the
-   raw text shown while editing, so body blocks always inherit the panel font.
-   Headings keep the theme scale on purpose. */
-.og-gallery__caption-content p,
-.og-gallery__caption-content ul,
-.og-gallery__caption-content ol,
-.og-gallery__caption-content li,
-.og-gallery__caption-content blockquote,
-.og-gallery__caption-content .el-p,
-.og-gallery__caption-content .el-ul,
-.og-gallery__caption-content .el-ol {
-  font-size: inherit !important;
-  font-family: inherit !important;
-  color: inherit !important;
-}
-
-.og-gallery__caption-content > :first-child {
-  margin-top: 0;
+  font-size: var(--og-caption-text-size, var(--font-text-size));
+  font-family: var(--og-caption-text-family, inherit);
+  color: var(--og-caption-text-color, inherit);
+  line-height: var(--og-caption-text-line-height, var(--line-height-normal));
 }
 
 .og-gallery__caption-content:focus-visible {
@@ -918,18 +820,3 @@
   height: auto;
 }
 
-/* Task lists inside captions behave like task lists in a normal note:
-   the checkbox stays on the text row and clicking it toggles the task. */
-.og-gallery__caption-content .task-list-item {
-  line-height: var(--og-caption-line-height);
-}
-
-.og-gallery__caption-content input.task-list-item-checkbox {
-  position: relative;
-  top: 0;
-  margin-block: 0;
-  margin-inline-end: 0.6em;
-  /* Sits on the text row without making the line taller than a raw line. */
-  vertical-align: -0.15em;
-  cursor: pointer;
-}
