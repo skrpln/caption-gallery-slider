@@ -686,9 +686,9 @@
   color: var(--text-normal);
 }
 
-/* A hidden Markdown paragraph. The plugin reads its resolved typography and
-   reuses it while the caption is being edited, so raw Markdown is shown with
-   the same font as the rendered paragraphs above it. */
+/* A hidden Markdown paragraph. The plugin reads its resolved typography from
+   the active theme and applies it to the whole panel, so a caption reads like
+   a line of the note it lives in. */
 .og-gallery__caption-probe {
   position: absolute;
   visibility: hidden;
@@ -697,10 +697,18 @@
   pointer-events: none;
 }
 
-/* The rendered caption is a note fragment: it carries the same classes as a
-   reading view, so the active theme styles it exactly like note content.
-   The plugin only trims the outer margins, because the panel is short. */
 .og-gallery__caption-content {
+  /* Every line of the caption shares one typography, the way every line of a
+     note shares one typography while editing. */
+  font-size: var(--og-caption-text-size, var(--font-text-size));
+  font-family: var(--og-caption-text-family, inherit);
+  color: var(--og-caption-text-color, inherit);
+  line-height: var(--og-caption-text-line-height, var(--line-height-normal));
+
+  /* Checkboxes and list rows copy the note as well. */
+  --checkbox-size: var(--og-caption-checkbox-size, var(--font-text-size));
+  --list-spacing: 0px;
+
   width: 100%;
   height: 100%;
   overflow: auto;
@@ -710,20 +718,55 @@
   cursor: text;
 }
 
+.og-gallery__caption.is-editing .og-gallery__caption-content {
+  white-space: pre-wrap;
+}
+
+/* Body blocks never carry their own size, family, colour, or leading: the
+   panel decides, exactly like a line in the editor. Headings keep the theme
+   scale, so a caption heading still reads as a heading. */
+.og-gallery__caption-content p,
+.og-gallery__caption-content ul,
+.og-gallery__caption-content ol,
+.og-gallery__caption-content li,
+.og-gallery__caption-content blockquote,
+.og-gallery__caption-content pre,
+.og-gallery__caption-content .el-p,
+.og-gallery__caption-content .el-ul,
+.og-gallery__caption-content .el-ol,
+.og-gallery__caption-content .el-blockquote,
+.og-gallery__caption-content .el-pre,
+.og-gallery__caption-content .markdown-preview-section,
+.og-gallery__caption-content .markdown-preview-section > div {
+  font-size: inherit !important;
+  font-family: inherit !important;
+  color: inherit !important;
+  line-height: inherit !important;
+  margin-block: 0 !important;
+  min-height: 0 !important;
+}
+
+.og-gallery__caption-content h1,
+.og-gallery__caption-content h2,
+.og-gallery__caption-content h3,
+.og-gallery__caption-content h4,
+.og-gallery__caption-content h5,
+.og-gallery__caption-content h6 {
+  margin-block: 0 !important;
+  min-height: 0 !important;
+}
+
 .og-gallery__caption-content > :first-child {
   margin-top: 0 !important;
 }
 
-.og-gallery__caption-content > :last-child {
-  margin-bottom: 0 !important;
-}
-
-.og-gallery__caption.is-editing .og-gallery__caption-content {
-  white-space: pre-wrap;
-  font-size: var(--og-caption-text-size, var(--font-text-size));
-  font-family: var(--og-caption-text-family, inherit);
-  color: var(--og-caption-text-color, inherit);
-  line-height: var(--og-caption-text-line-height, var(--line-height-normal));
+.og-gallery__caption-content input.task-list-item-checkbox {
+  position: relative;
+  top: var(--og-caption-checkbox-top, 0px);
+  margin-block: 0;
+  margin-inline-end: var(--og-caption-checkbox-margin, 0.6em);
+  vertical-align: var(--og-caption-checkbox-align, baseline);
+  cursor: pointer;
 }
 
 .og-gallery__caption-content:focus-visible {

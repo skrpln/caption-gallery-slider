@@ -844,13 +844,14 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     contentEl.tabIndex = 0;
     this.captionContentEl = contentEl;
 
-    // A hidden Markdown paragraph. Themes are free to give Markdown paragraphs
-    // their own size, family, and colour, so the caption reads that styling
-    // from the theme instead of guessing it.
+    // Hidden copies of a note line, one per reading mode. Themes style reading
+    // view and Live Preview differently, so the caption measures the mode the
+    // note is actually in instead of guessing.
     const probeEl = document.createElement("div");
-    probeEl.className = "og-gallery__caption-probe markdown-preview-view markdown-rendered";
+    probeEl.className = "og-gallery__caption-probe";
     probeEl.setAttribute("aria-hidden", "true");
-    probeEl.appendChild(document.createElement("p"));
+    probeEl.appendChild(createReadingProbe());
+    probeEl.appendChild(createLivePreviewProbe());
     this.captionProbeEl = probeEl;
 
     const openButtonEl = document.createElement("button");
@@ -1226,20 +1227,36 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   }
 
   private syncCaptionTypography(): void {
-    const paragraphEl = this.captionProbeEl?.querySelector("p");
-    if (!paragraphEl || !this.captionEl) {
+    if (!this.captionProbeEl || !this.captionEl) {
       return;
     }
 
-    const styles = window.getComputedStyle(paragraphEl);
-    if (!styles.fontSize) {
+    const livePreview = Boolean(this.containerEl.closest(".markdown-source-view"));
+    const scope = this.captionProbeEl.querySelector<HTMLElement>(
+      livePreview ? ".og-gallery__caption-probe-live" : ".og-gallery__caption-probe-reading",
+    );
+    const lineEl = scope?.querySelector<HTMLElement>(".og-gallery__caption-probe-line");
+    const checkboxEl = scope?.querySelector<HTMLElement>("input.task-list-item-checkbox");
+    if (!lineEl || !checkboxEl) {
       return;
     }
 
-    this.captionEl.style.setProperty("--og-caption-text-size", styles.fontSize);
-    this.captionEl.style.setProperty("--og-caption-text-family", styles.fontFamily);
-    this.captionEl.style.setProperty("--og-caption-text-color", styles.color);
-    this.captionEl.style.setProperty("--og-caption-text-line-height", styles.lineHeight);
+    const line = window.getComputedStyle(lineEl);
+    if (!line.fontSize) {
+      // Computed styles stay empty until the gallery is attached to the document.
+      return;
+    }
+
+    const checkbox = window.getComputedStyle(checkboxEl);
+    const captionStyle = this.captionEl.style;
+    captionStyle.setProperty("--og-caption-text-size", line.fontSize);
+    captionStyle.setProperty("--og-caption-text-family", line.fontFamily);
+    captionStyle.setProperty("--og-caption-text-color", line.color);
+    captionStyle.setProperty("--og-caption-text-line-height", line.lineHeight);
+    captionStyle.setProperty("--og-caption-checkbox-size", checkbox.width);
+    captionStyle.setProperty("--og-caption-checkbox-align", checkbox.verticalAlign);
+    captionStyle.setProperty("--og-caption-checkbox-top", checkbox.position === "static" ? "0px" : checkbox.top);
+    captionStyle.setProperty("--og-caption-checkbox-margin", checkbox.marginInlineEnd);
   }
 
   private async updateCaption(item: GalleryItem): Promise<void> {
@@ -1966,6 +1983,66 @@ function isViewportControlTarget(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && Boolean(target.closest(
     "button, .og-gallery__overlay-controls, .og-gallery__nav, .og-gallery__resize-handle",
   ));
+}
+
+function createReadingProbe(): HTMLElement {
+  const scopeEl = document.createElement("div");
+  scopeEl.className = "og-gallery__caption-probe-reading markdown-preview-view markdown-rendered";
+
+  const paragraphEl = document.createElement("p");
+  paragraphEl.className = "og-gallery__caption-probe-line";
+  scopeEl.appendChild(paragraphEl);
+
+  const listEl = document.createElement("ul");
+  listEl.className = "contains-task-list";
+  const itemEl = document.createElement("li");
+  itemEl.className = "task-list-item";
+  itemEl.appendChild(createProbeCheckbox());
+  listEl.appendChild(itemEl);
+  scopeEl.appendChild(listEl);
+
+  return scopeEl;
+}
+
+function createLivePreviewProbe(): HTMLElement {
+  const scopeEl = document.createElement("div");
+  scopeEl.className = "og-gallery__caption-probe-live markdown-source-view mod-cm6 is-live-preview";
+
+  const editorEl = document.createElement("div");
+  editorEl.className = "cm-editor";
+  const scrollerEl = document.createElement("div");
+  scrollerEl.className = "cm-scroller";
+  const contentContainerEl = document.createElement("div");
+  contentContainerEl.className = "cm-contentContainer";
+  const contentEl = document.createElement("div");
+  contentEl.className = "cm-content";
+
+  const lineEl = document.createElement("div");
+  lineEl.className = "og-gallery__caption-probe-line cm-line";
+
+  const taskLineEl = document.createElement("div");
+  taskLineEl.className = "cm-line HyperMD-list-line HyperMD-list-line-1 HyperMD-task-line";
+  const labelEl = document.createElement("label");
+  labelEl.className = "task-list-label";
+  labelEl.appendChild(createProbeCheckbox());
+  taskLineEl.appendChild(labelEl);
+
+  contentEl.append(lineEl, taskLineEl);
+  contentContainerEl.appendChild(contentEl);
+  scrollerEl.appendChild(contentContainerEl);
+  editorEl.appendChild(scrollerEl);
+  scopeEl.appendChild(editorEl);
+
+  return scopeEl;
+}
+
+function createProbeCheckbox(): HTMLInputElement {
+  const checkboxEl = document.createElement("input");
+  checkboxEl.type = "checkbox";
+  checkboxEl.className = "task-list-item-checkbox";
+  checkboxEl.tabIndex = -1;
+  checkboxEl.disabled = true;
+  return checkboxEl;
 }
 
 function createMessage(message: string): HTMLElement {
