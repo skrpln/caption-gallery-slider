@@ -14,4 +14,6 @@ Initial public release.
 - Added custom video controls, playback state, fragment ranges, and looped fragments.
 - Added fullscreen, crop/fit view modes, rotation, manual crop pan/zoom, and resize handles.
 - Added responsive overlay controls for narrow popups and small viewports.
+- Caption text follows the active theme and the reading mode of the note, so a
+  caption reads like a line of the note it lives in.
 - Requires Obsidian 1.6.6 or newer. Desktop only in this release.
