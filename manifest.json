@@ -1,7 +1,7 @@
 {
   "id": "caption-gallery-slider",
   "name": "Caption Gallery Slider",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "minAppVersion": "1.6.6",
   "description": "A native-feeling gallery slider for local images and videos with editable Markdown captions.",
   "author": "skrpln",
