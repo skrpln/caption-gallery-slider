@@ -42,21 +42,21 @@ import {
 export interface GalleryRendererOptions {
   config: GalleryConfig;
   items: GalleryItem[];
-  getResourcePath(path: string): string | null;
-  getCaption?(item: GalleryItem): Promise<CaptionState>;
-  saveCaption?(item: GalleryItem, body: string): Promise<CaptionState>;
-  rotateCaption?(item: GalleryItem, rotation: number): Promise<CaptionState>;
-  saveCrop?(item: GalleryItem, crop: CaptionCrop): Promise<CaptionState>;
-  saveVideoPlayback?(item: GalleryItem, playback: CaptionVideoPlayback): Promise<CaptionState>;
-  openCaption?(item: GalleryItem): Promise<void>;
-  saveSizeOption?(option: GallerySizeOption, value: number): Promise<void>;
-  renderCaptionMarkdown?(
+  getResourcePath: (path: string) => string | null;
+  getCaption?: (item: GalleryItem) => Promise<CaptionState>;
+  saveCaption?: (item: GalleryItem, body: string) => Promise<CaptionState>;
+  rotateCaption?: (item: GalleryItem, rotation: number) => Promise<CaptionState>;
+  saveCrop?: (item: GalleryItem, crop: CaptionCrop) => Promise<CaptionState>;
+  saveVideoPlayback?: (item: GalleryItem, playback: CaptionVideoPlayback) => Promise<CaptionState>;
+  openCaption?: (item: GalleryItem) => Promise<void>;
+  saveSizeOption?: (option: GallerySizeOption, value: number) => Promise<void>;
+  renderCaptionMarkdown?: (
     markdown: string,
     containerEl: HTMLElement,
     sourcePath: string,
     component: MarkdownRenderChild,
-  ): Promise<void>;
-  activateKeyboardTarget?(target: GalleryKeyboardTarget): void;
+  ) => Promise<void>;
+  activateKeyboardTarget?: (target: GalleryKeyboardTarget) => void;
 }
 
 interface GalleryResizeState {
@@ -72,7 +72,7 @@ interface CropDragState {
   lastX: number;
   lastY: number;
   activated: boolean;
-  timer: ReturnType<typeof setTimeout> | null;
+  timer: number | null;
 }
 
 type VideoRangeEdge = "start" | "end";
@@ -146,8 +146,8 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   private captionSaveToken = 0;
   private resizeState: GalleryResizeState | null = null;
   private cropDragState: CropDragState | null = null;
-  private cropPersistTimer: ReturnType<typeof setTimeout> | null = null;
-  private cropZoomCursorTimer: ReturnType<typeof setTimeout> | null = null;
+  private cropPersistTimer: number | null = null;
+  private cropZoomCursorTimer: number | null = null;
   private suppressViewportClick = false;
 
   constructor(containerEl: HTMLElement, options: GalleryRendererOptions) {
@@ -181,8 +181,10 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
 
     const root = document.createElement("div");
     root.className = `og-gallery og-gallery--view-${this.config.view}`;
-    root.style.setProperty("--og-view-height", `${this.config.viewHeight}px`);
-    root.style.setProperty("--og-caption-height", `${this.config.captionHeight}px`);
+    root.setCssProps({
+      "--og-view-height": `${this.config.viewHeight}px`,
+      "--og-caption-height": `${this.config.captionHeight}px`,
+    });
     this.rootEl = root;
     this.containerEl.appendChild(root);
     this.registerRootActivation(root);
@@ -677,7 +679,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     videoProgressLabelId += 1;
     progressLabelEl.id = `og-gallery-video-progress-${videoProgressLabelId}`;
     progressLabelEl.className = "og-gallery__visually-hidden";
-    progressLabelEl.textContent = "video position";
+    progressLabelEl.textContent = "Video position";
     progressEl.setAttribute("aria-labelledby", progressLabelEl.id);
     const progressRangeEl = document.createElement("div");
     progressRangeEl.className = "og-gallery__video-progress-range";
@@ -969,14 +971,14 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     const nextValue = Math.round(clamp(value, min, MAX_GALLERY_SIZE));
     if (option === "view_height") {
       this.config.viewHeight = nextValue;
-      this.rootEl?.style.setProperty("--og-view-height", `${nextValue}px`);
+      this.rootEl?.setCssProps({ "--og-view-height": `${nextValue}px` });
       this.applyRotation(this.currentRotation);
       this.updateOverlayControlsLayout();
       return;
     }
 
     this.config.captionHeight = nextValue;
-    this.rootEl?.style.setProperty("--og-caption-height", `${nextValue}px`);
+    this.rootEl?.setCssProps({ "--og-caption-height": `${nextValue}px` });
   }
 
   private setInputActive(active: boolean): void {
@@ -1108,7 +1110,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
 
     const maxIndex = Math.max(0, this.items.length - 1);
     const progress = maxIndex === 0 ? 0 : this.state.currentIndex / maxIndex;
-    this.navThumbEl.style.setProperty("--og-nav-progress", String(progress));
+    this.navThumbEl.setCssProps({ "--og-nav-progress": String(progress) });
     this.navRailEl.setAttribute("aria-valuenow", String(this.state.currentIndex + 1));
   }
 
@@ -1314,7 +1316,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
       this.captionEl.classList.add("is-empty");
       this.captionContentEl.empty();
       const placeholderEl = document.createElement("em");
-      placeholderEl.textContent = "insert caption";
+      placeholderEl.textContent = "Insert caption";
       this.captionContentEl.appendChild(placeholderEl);
       return;
     }
@@ -1474,13 +1476,15 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     }
 
     this.currentRotation = rotation;
-    this.mediaEl.style.setProperty("--og-media-rotation", `${rotation}deg`);
+    this.mediaEl.setCssProps({ "--og-media-rotation": `${rotation}deg` });
     const rotatedQuarter = rotation % 180 !== 0;
     this.mediaEl.classList.toggle("is-rotated-quarter", rotatedQuarter);
 
     if (rotatedQuarter && this.viewportEl) {
-      this.mediaEl.style.setProperty("--og-media-box-width", `${this.viewportEl.clientHeight}px`);
-      this.mediaEl.style.setProperty("--og-media-box-height", `${this.viewportEl.clientWidth}px`);
+      this.mediaEl.setCssProps({
+        "--og-media-box-width": `${this.viewportEl.clientHeight}px`,
+        "--og-media-box-height": `${this.viewportEl.clientWidth}px`,
+      });
     } else {
       this.mediaEl.style.removeProperty("--og-media-box-width");
       this.mediaEl.style.removeProperty("--og-media-box-height");
@@ -1493,9 +1497,11 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
       return;
     }
 
-    this.mediaEl.style.setProperty("--og-media-crop-zoom", String(crop.zoom));
-    this.mediaEl.style.objectPosition = `${crop.x}% ${crop.y}%`;
-    this.mediaEl.style.transformOrigin = `${crop.x}% ${crop.y}%`;
+    this.mediaEl.setCssProps({ "--og-media-crop-zoom": String(crop.zoom) });
+    this.mediaEl.setCssStyles({
+      objectPosition: `${crop.x}% ${crop.y}%`,
+      transformOrigin: `${crop.x}% ${crop.y}%`,
+    });
     this.zoomOutButtonEl?.toggleAttribute("disabled", crop.zoom <= 1);
   }
 
@@ -1526,7 +1532,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
       lastX: event.clientX,
       lastY: event.clientY,
       activated: false,
-      timer: setTimeout(() => {
+      timer: window.setTimeout(() => {
         if (!this.cropDragState || this.cropDragState.pointerId !== event.pointerId || !this.viewportEl) {
           return;
         }
@@ -1588,7 +1594,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   private markCropZoomInteraction(): void {
     this.rootEl?.classList.add("is-crop-zooming");
     this.clearCropZoomCursorTimer();
-    this.cropZoomCursorTimer = setTimeout(() => {
+    this.cropZoomCursorTimer = window.setTimeout(() => {
       this.rootEl?.classList.remove("is-crop-zooming");
       this.cropZoomCursorTimer = null;
     }, CROP_INTERACTION_CURSOR_MS);
@@ -1596,7 +1602,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
 
   private queuePersistCrop(): void {
     this.clearCropPersistTimer();
-    this.cropPersistTimer = setTimeout(() => {
+    this.cropPersistTimer = window.setTimeout(() => {
       this.cropPersistTimer = null;
       void this.persistCrop(this.currentCrop);
     }, 260);
@@ -1623,21 +1629,21 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
 
   private clearCropDragTimer(): void {
     if (this.cropDragState?.timer) {
-      clearTimeout(this.cropDragState.timer);
+      window.clearTimeout(this.cropDragState.timer);
       this.cropDragState.timer = null;
     }
   }
 
   private clearCropPersistTimer(): void {
     if (this.cropPersistTimer) {
-      clearTimeout(this.cropPersistTimer);
+      window.clearTimeout(this.cropPersistTimer);
       this.cropPersistTimer = null;
     }
   }
 
   private clearCropZoomCursorTimer(): void {
     if (this.cropZoomCursorTimer) {
-      clearTimeout(this.cropZoomCursorTimer);
+      window.clearTimeout(this.cropZoomCursorTimer);
       this.cropZoomCursorTimer = null;
     }
   }
@@ -1785,8 +1791,10 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     const tooltipY = clamp(event.clientY - rootRect.top, 20, Math.max(20, rootRect.height - 6));
 
     this.videoProgressTooltipEl.textContent = formatVideoProgressTime(time);
-    this.videoProgressTooltipEl.style.left = `${tooltipX}px`;
-    this.videoProgressTooltipEl.style.top = `${tooltipY}px`;
+    this.videoProgressTooltipEl.setCssStyles({
+      left: `${tooltipX}px`,
+      top: `${tooltipY}px`,
+    });
     this.videoProgressTooltipEl.classList.add("is-visible");
   }
 
@@ -1865,9 +1873,11 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     const videoEl = this.getCurrentVideoElement();
     if (!videoEl || !this.videoProgressEl || !Number.isFinite(videoEl.duration) || videoEl.duration <= 0) {
       if (this.videoProgressEl) {
-        this.videoProgressEl.style.setProperty("--og-video-progress", "0");
-        this.videoProgressEl.style.setProperty("--og-video-range-start", "0");
-        this.videoProgressEl.style.setProperty("--og-video-range-end", "1");
+        this.videoProgressEl.setCssProps({
+          "--og-video-progress": "0",
+          "--og-video-range-start": "0",
+          "--og-video-range-end": "1",
+        });
         this.videoProgressEl.setAttribute("aria-valuenow", "0");
         this.videoProgressEl.setAttribute("aria-valuetext", "00:00");
       }
@@ -1876,9 +1886,11 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
 
     const range = this.getCurrentVideoRange(videoEl);
     const progress = Math.round((videoEl.currentTime / videoEl.duration) * 1000);
-    this.videoProgressEl.style.setProperty("--og-video-progress", String(progress / 1000));
-    this.videoProgressEl.style.setProperty("--og-video-range-start", String(videoTimeToProgress(range.start, videoEl.duration)));
-    this.videoProgressEl.style.setProperty("--og-video-range-end", String(videoTimeToProgress(range.end, videoEl.duration)));
+    this.videoProgressEl.setCssProps({
+      "--og-video-progress": String(progress / 1000),
+      "--og-video-range-start": String(videoTimeToProgress(range.start, videoEl.duration)),
+      "--og-video-range-end": String(videoTimeToProgress(range.end, videoEl.duration)),
+    });
     this.videoProgressEl.setAttribute("aria-valuenow", String(progress));
     this.videoProgressEl.setAttribute("aria-valuetext", formatVideoProgressTime(videoEl.currentTime));
   }
@@ -1942,7 +1954,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     const tooltip = registerAutoHidingTooltip(element, label, window, (targetEl, tooltipLabel) => {
       setTooltip(targetEl, tooltipLabel, { classes: [AUTO_HIDING_TOOLTIP_CLASS] });
     });
-    this.register(tooltip.destroy);
+    this.register(() => tooltip.destroy());
   }
 }
 

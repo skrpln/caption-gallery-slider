@@ -66,7 +66,7 @@ Layout:
 - width: full gallery width;
 - height: controlled by `caption_height`, default `60px`;
 - shape: theme-aware rounded rectangle;
-- empty state with configured storage: italic `insert caption` placeholder;
+- empty state with configured storage: italic `Insert caption` placeholder;
 - empty state without configured storage: italic setup hint and inactive editor.
 
 Clicking a configured empty caption panel clears the placeholder and focuses a contenteditable Markdown editor. The caption note is created only after the first non-empty input. After blur, the saved body is rendered as Markdown again.

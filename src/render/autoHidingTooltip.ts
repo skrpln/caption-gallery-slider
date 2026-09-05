@@ -12,8 +12,8 @@ export interface AutoHidingTooltipHandle {
 export type NativeTooltipSetter = (element: HTMLElement, label: string) => void;
 
 interface TimerApi {
-  clearTimeout(timeoutId: ReturnType<typeof setTimeout>): void;
-  setTimeout(callback: () => void, delay: number): ReturnType<typeof setTimeout>;
+  clearTimeout(timeoutId: number): void;
+  setTimeout(callback: () => void, delay: number): number;
 }
 
 export function setTooltipLabel(element: HTMLElement, label: string): void {
@@ -24,10 +24,10 @@ export function setTooltipLabel(element: HTMLElement, label: string): void {
 export function registerAutoHidingTooltip(
   element: HTMLElement,
   label: string,
-  timers: TimerApi = globalThis,
+  timers: TimerApi = window,
   setNativeTooltip?: NativeTooltipSetter,
 ): AutoHidingTooltipHandle {
-  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  let timeoutId: number | null = null;
 
   const clearTimer = (): void => {
     if (timeoutId !== null) {

@@ -40,7 +40,7 @@ describe("auto hiding tooltip labels", () => {
   it("removes the visible tooltip label five seconds after hover", () => {
     vi.useFakeTimers();
     const element = new FakeTooltipElement() as unknown as HTMLElement;
-    const handle = registerAutoHidingTooltip(element, "fullscreen");
+    const handle = registerAutoHidingTooltip(element, "fullscreen", globalThis);
 
     element.dispatchEvent(new Event("mouseenter"));
     expect(element.getAttribute("aria-label")).toBe("fullscreen");
@@ -58,7 +58,7 @@ describe("auto hiding tooltip labels", () => {
   it("restores the accessible label when hover ends", () => {
     vi.useFakeTimers();
     const element = new FakeTooltipElement() as unknown as HTMLElement;
-    const handle = registerAutoHidingTooltip(element, "caption");
+    const handle = registerAutoHidingTooltip(element, "caption", globalThis);
 
     element.dispatchEvent(new Event("mouseenter"));
     vi.advanceTimersByTime(TOOLTIP_VISIBLE_MS);
@@ -94,7 +94,7 @@ describe("auto hiding tooltip labels", () => {
     };
     const element = new FakeTooltipElement() as unknown as HTMLElement;
     Object.defineProperty(element, "ownerDocument", { value: ownerDocument });
-    const handle = registerAutoHidingTooltip(element, "rotate");
+    const handle = registerAutoHidingTooltip(element, "rotate", globalThis);
 
     element.dispatchEvent(new Event("mouseenter"));
     vi.advanceTimersByTime(TOOLTIP_VISIBLE_MS);

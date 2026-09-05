@@ -75,9 +75,10 @@ export default class ObsidianGalleryPlugin extends Plugin {
   }
 
   async loadSettings(): Promise<void> {
+    const storedSettings = (await this.loadData()) as Partial<ObsidianGallerySettings> | null;
     this.settings = {
       ...DEFAULT_SETTINGS,
-      ...(await this.loadData()),
+      ...(storedSettings ?? {}),
     };
   }
 

@@ -100,7 +100,7 @@ function parseRawGalleryBlock(source: string): RawGalleryConfig {
     }
 
     if (key in raw || isKnownScalarKey(key)) {
-      raw[key] = value as never;
+      raw[key] = value;
     }
   }
 
