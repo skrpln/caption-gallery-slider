@@ -2,7 +2,9 @@
 
 All notable changes to Caption Gallery Slider are documented in this file.
 
-## Unreleased
+## 0.1.3
+
+Obsidian DOM helpers, declarative settings, and slide display fixes.
 
 - The gallery DOM is built with Obsidian's `createEl`, `createDiv`, and `createSpan` helpers instead of `document.createElement`.
 - The settings tab declares its setting through `getSettingDefinitions()`, so the caption folder appears in the settings search of Obsidian 1.13 and newer. Older versions keep the imperative tab.
