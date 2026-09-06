@@ -91,64 +91,6 @@ Videos:
 
 Caption Gallery Slider currently works with local vault files. Remote image URLs, remote videos, YouTube embeds, grid layouts, slideshow autoplay, and audio support are planned as future work.
 
-## Installation
-
-### Manual install
-
-1. Download the latest release assets from GitHub.
-2. Copy `main.js`, `manifest.json`, and `styles.css` into:
-
-   ```text
-   <your-vault>/.obsidian/plugins/caption-gallery-slider/
-   ```
-
-3. Reload Obsidian.
-4. Enable `Caption Gallery Slider` in Community plugins.
-
-### BRAT beta
-
-Before the plugin is accepted into the official Community Plugins directory, beta testers can install it with [BRAT](https://github.com/TfTHacker/obsidian42-brat).
-
-1. Install and enable BRAT.
-2. Open BRAT settings.
-3. Add this repository:
-
-   ```text
-   https://github.com/skrpln/caption-gallery-slider
-   ```
-
-4. Let BRAT download the release assets.
-5. Enable `Caption Gallery Slider` in Community plugins.
-
-## Development
-
-```bash
-npm install
-npm test
-npm run build
-```
-
-The production build outputs:
-
-- `main.js`
-- `manifest.json`
-- `styles.css`
-
-GitHub release tags must match `manifest.json.version` exactly, for example `0.1.0`.
-
-## Privacy
-
-Caption Gallery Slider is designed for local vault media. It does not use telemetry, analytics, or background network requests.
-
-If future remote media support is added, it will be documented clearly because rendering remote media requires network requests.
-
-## Limitations
-
-- The first public release focuses on single-slide galleries. Grid layouts are planned later.
-- Desktop only for now. Several controls appear on hover, which needs a touch-friendly redesign before mobile support.
-- Captions are created only after the first edit, so an empty placeholder does not create files by itself.
-- Very large videos depend on Obsidian and the operating system media stack.
-
 ## Support
 
 Please report bugs through GitHub Issues:
