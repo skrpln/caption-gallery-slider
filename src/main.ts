@@ -68,6 +68,10 @@ export default class ObsidianGalleryPlugin extends Plugin {
         activateKeyboardTarget: (target) => {
           this.activeGallery = target;
         },
+        reportError: (message, error) => {
+          console.error(`Caption Gallery Slider: ${message}`, error);
+          new Notice(`Caption Gallery Slider: ${message}`);
+        },
       });
 
       ctx.addChild(renderer);

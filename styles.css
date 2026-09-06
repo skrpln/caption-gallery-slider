@@ -336,6 +336,10 @@
 .og-gallery__media {
   --og-media-rotation: 0deg;
   --og-media-crop-zoom: 1;
+  /* Crop focus, as an offset from the media box center. Zoom scales around
+     this point, while rotation always pivots around the box center. */
+  --og-media-focus-x: 0%;
+  --og-media-focus-y: 0%;
 
   position: absolute;
   top: 50%;
@@ -346,7 +350,12 @@
   -webkit-user-drag: none;
   user-select: none;
   object-position: center;
-  transform: translate(-50%, -50%) rotate(var(--og-media-rotation)) scale(var(--og-media-crop-zoom));
+  transform:
+    translate(-50%, -50%)
+    rotate(var(--og-media-rotation))
+    translate(var(--og-media-focus-x), var(--og-media-focus-y))
+    scale(var(--og-media-crop-zoom))
+    translate(calc(-1 * var(--og-media-focus-x)), calc(-1 * var(--og-media-focus-y)));
   transform-origin: center;
   transition: transform 140ms ease;
 }
@@ -356,7 +365,8 @@
   height: var(--og-media-box-height, 100%);
 }
 
-.og-gallery.is-crop-dragging .og-gallery__media {
+.og-gallery.is-crop-dragging .og-gallery__media,
+.og-gallery__media.is-settling {
   transition: none;
 }
 

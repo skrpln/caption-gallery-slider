@@ -4,7 +4,7 @@ import { App, normalizePath, TFile, TFolder, type Vault } from "obsidian";
 import type { GalleryItem } from "../media/mediaTypes";
 import type { GalleryConfig } from "../parser/galleryBlockParser";
 import { DEFAULT_CROP, type CaptionCrop } from "./captionCrop";
-import { buildCaptionPath } from "./captionPath";
+import { buildCaptionPath, resolveExistingPath } from "./captionPath";
 import {
   createCaptionMarkdown,
   DEFAULT_VIDEO_PLAYBACK,
@@ -313,16 +313,28 @@ export class ObsidianCaptionService {
       return null;
     }
 
-    return normalizePath(buildCaptionPath({
+    return resolveVaultPath(this.app.vault, normalizePath(buildCaptionPath({
       gallerySaveDir,
       galleryId: config.galleryId,
       item,
-    }));
+    })));
   }
 }
 
+/**
+ * Returns `path` spelled the way its existing folders and files are spelled
+ * in the vault, so lookups and writes hit the same entries on case-insensitive
+ * file systems. Missing parts keep the requested spelling.
+ */
+export function resolveVaultPath(vault: Vault, path: string): string {
+  return resolveExistingPath(path, (folderPath) => {
+    const folder = folderPath ? vault.getAbstractFileByPath(folderPath) : vault.getRoot();
+    return folder instanceof TFolder ? folder.children.map((child) => child.name) : null;
+  });
+}
+
 export async function ensureFolderPath(vault: Vault, path: string): Promise<void> {
-  const normalized = path.replace(/^\/+|\/+$/g, "");
+  const normalized = resolveVaultPath(vault, path.replace(/^\/+|\/+$/g, ""));
   if (!normalized) {
     return;
   }

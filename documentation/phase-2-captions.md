@@ -86,6 +86,12 @@ The active item marker is always a fixed horizontal muted oval. In `dots` layout
 
 Plain navigation is rendered inside the media viewport and follows the same hover-only visibility model as viewport controls: it is hidden by default and appears on viewport hover or focus.
 
+## Caption Path Resolution
+
+Obsidian's file index compares paths exactly, while the file systems on macOS and Windows ignore case. Caption paths are therefore resolved against existing folders and files case-insensitively and Unicode-normalized (`resolveExistingPath()` in `src/captions/captionPath.ts`, `resolveVaultPath()` in the service). A gallery renamed from `малыш` to `Малыш` keeps writing into the caption folder created under the old name instead of failing on a folder that "already exists". Folders that do not exist yet are created with the spelling from the block.
+
+Every caption write (rotation, crop, playback, body) reports a failure through `reportError`, which the plugin shows as a notice and logs to the console. A rotation that could not be stored is turned back counter-clockwise, so the visible angle always matches the caption note.
+
 ## Media Rotation
 
 The current `grid: 1,1` renderer shows a hover-only rotate button in the bottom-right corner of the viewport. Each click rotates the current media clockwise by `90` degrees.
@@ -97,6 +103,8 @@ rotation: 90
 ```
 
 Allowed runtime values are normalized to `0`, `90`, `180`, or `270` through modulo `360`. The future grid renderer should place the same rotate button inside each media cell and write rotation to each cell's own caption note.
+
+The rendered CSS angle is kept apart from the stored value and only grows (`270` to `360` to `450`), so the `transform` transition always turns clockwise, including the step from `270` back to `0`. The helpers live in `src/media/mediaRotation.ts`. Each click turns one quarter from the visible angle, waits for the slide's caption state before the first turn, and only the latest save result is applied when clicks overlap.
 
 ## Markdown Links
 

@@ -4,6 +4,7 @@ import { MarkdownRenderChild, setIcon, setTooltip } from "obsidian";
 import type { GalleryConfig } from "../parser/galleryBlockParser";
 import type { GallerySizeOption } from "../parser/galleryBlockEditor";
 import type { GalleryItem } from "../media/mediaTypes";
+import { clockwiseRotationAngle, counterclockwiseRotationAngle, normalizeRotation } from "../media/mediaRotation";
 import { createGalleryState, goToIndex, nextIndex, previousIndex, type GalleryState } from "../state/galleryState";
 import type { CaptionState } from "../captions/obsidianCaptionService";
 import { DEFAULT_VIDEO_PLAYBACK, type CaptionVideoPlayback } from "../captions/captionMarkdown";
@@ -14,6 +15,7 @@ import {
   DEFAULT_CROP,
   panCrop,
   panCropByPixels,
+  rotateCropDelta,
   scaleCropZoom,
   zoomCrop,
   type CaptionCrop,
@@ -57,6 +59,8 @@ export interface GalleryRendererOptions {
     component: MarkdownRenderChild,
   ) => Promise<void>;
   activateKeyboardTarget?: (target: GalleryKeyboardTarget) => void;
+  /** Tells the user that a caption note could not be read or written. */
+  reportError?: (message: string, error: unknown) => void;
 }
 
 interface GalleryResizeState {
@@ -98,6 +102,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   private readonly saveSizeOption: ((option: GallerySizeOption, value: number) => Promise<void>) | null;
   private readonly renderCaptionMarkdown: GalleryRendererOptions["renderCaptionMarkdown"] | null;
   private readonly activateKeyboardTarget: ((target: GalleryKeyboardTarget) => void) | null;
+  private readonly reportError: ((message: string, error: unknown) => void) | null;
   private state: GalleryState;
   private rootEl: HTMLElement | null = null;
   private viewportEl: HTMLElement | null = null;
@@ -144,6 +149,8 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   private captionEditing = false;
   private captionRenderToken = 0;
   private captionSaveToken = 0;
+  private captionLoading: Promise<void> | null = null;
+  private rotationSaveToken = 0;
   private resizeState: GalleryResizeState | null = null;
   private cropDragState: CropDragState | null = null;
   private cropPersistTimer: number | null = null;
@@ -164,6 +171,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     this.saveSizeOption = options.saveSizeOption ?? null;
     this.renderCaptionMarkdown = options.renderCaptionMarkdown ?? null;
     this.activateKeyboardTarget = options.activateKeyboardTarget ?? null;
+    this.reportError = options.reportError ?? null;
     this.state = createGalleryState(options.items.length);
   }
 
@@ -263,7 +271,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
       return false;
     }
 
-    const delta = cropKeyboardDelta(direction);
+    const delta = rotateCropDelta(cropKeyboardDelta(direction), this.currentRotation);
     this.applyCrop(panCrop(this.currentCrop, delta.x, delta.y));
     this.queuePersistCrop();
     return true;
@@ -1150,9 +1158,15 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
       this.mediaEl.load();
     }
 
-    this.applyRotation(0);
+    // The media element may be reused for the next item, so reset rotation and
+    // crop without the transition: a new item must not spin or zoom into place.
+    this.mediaEl?.classList.add("is-settling");
+    this.currentRotation = 0;
+    this.setVisualRotation(0);
     this.applyCrop(DEFAULT_CROP);
     this.applyVideoPlayback(DEFAULT_VIDEO_PLAYBACK);
+    void this.mediaEl?.offsetWidth;
+    this.mediaEl?.classList.remove("is-settling");
 
     this.dotEls.forEach((dotEl, index) => {
       dotEl.classList.toggle("is-active", index === this.state.currentIndex);
@@ -1168,7 +1182,15 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     });
     this.updateNavigationPosition();
 
-    void this.updateCaption(item);
+    this.captionLoading = this.loadCaption(item);
+  }
+
+  private async loadCaption(item: GalleryItem): Promise<void> {
+    try {
+      await this.updateCaption(item);
+    } catch (error) {
+      this.reportError?.(`cannot load the caption of ${item.name}.`, error);
+    }
   }
 
   private ensureMediaElement(item: GalleryItem): void {
@@ -1363,7 +1385,14 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     listItemEl?.classList.toggle("is-checked", checked);
 
     const token = (this.captionSaveToken += 1);
-    const nextState = await this.saveCaption(item, body);
+    let nextState: CaptionState;
+    try {
+      nextState = await this.saveCaption(item, body);
+    } catch (error) {
+      this.reportError?.(`cannot save the caption of ${item.name}.`, error);
+      return;
+    }
+
     if (token !== this.captionSaveToken) {
       return;
     }
@@ -1408,7 +1437,14 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     }
 
     const token = (this.captionSaveToken += 1);
-    const nextState = await this.saveCaption(item, body);
+    let nextState: CaptionState;
+    try {
+      nextState = await this.saveCaption(item, body);
+    } catch (error) {
+      this.reportError?.(`cannot save the caption of ${item.name}.`, error);
+      return;
+    }
+
     if (token !== this.captionSaveToken) {
       return;
     }
@@ -1452,12 +1488,36 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
       return;
     }
 
-    const currentRotation = this.captionState?.rotation ?? 0;
-    const nextRotation = (currentRotation + 90) % 360;
+    // Start from the stored state of this slide, not from the placeholder
+    // angle shown while the caption note is still loading.
+    await this.captionLoading;
+    if (this.items[this.state.currentIndex] !== item) {
+      return;
+    }
+
+    // What the user sees is the source of truth: one click is one quarter turn
+    // from the visible angle, even while an earlier save is still running.
+    const nextRotation = normalizeRotation(this.currentRotation + 90);
+    const token = (this.rotationSaveToken += 1);
     this.applyRotation(nextRotation);
-    const nextState = await this.rotateCaption(item, nextRotation);
+
+    let nextState: CaptionState;
+    try {
+      nextState = await this.rotateCaption(item, nextRotation);
+    } catch (error) {
+      this.reportError?.(`cannot save the rotation of ${item.name}.`, error);
+      if (token === this.rotationSaveToken && this.items[this.state.currentIndex] === item) {
+        this.revertRotation();
+      }
+      return;
+    }
+
+    if (token !== this.rotationSaveToken || this.items[this.state.currentIndex] !== item) {
+      return;
+    }
+
     if (nextState.status === "unconfigured") {
-      this.applyRotation(0);
+      this.revertRotation();
       return;
     }
 
@@ -1470,14 +1530,28 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     }
   }
 
+  /** Turns the media back to the last rotation that is actually stored. */
+  private revertRotation(): void {
+    const storedRotation = this.captionState?.rotation ?? 0;
+    this.setVisualRotation(counterclockwiseRotationAngle(this.currentRotation, storedRotation));
+  }
+
+  /**
+   * Applies a persisted rotation (0, 90, 180 or 270). The rendered angle is
+   * chosen so that the transition always turns clockwise, so it may exceed 360.
+   */
   private applyRotation(rotation: number): void {
+    this.setVisualRotation(clockwiseRotationAngle(this.currentRotation, rotation));
+  }
+
+  private setVisualRotation(angle: number): void {
     if (!this.mediaEl) {
       return;
     }
 
-    this.currentRotation = rotation;
-    this.mediaEl.setCssProps({ "--og-media-rotation": `${rotation}deg` });
-    const rotatedQuarter = rotation % 180 !== 0;
+    this.currentRotation = angle;
+    this.mediaEl.setCssProps({ "--og-media-rotation": `${angle}deg` });
+    const rotatedQuarter = angle % 180 !== 0;
     this.mediaEl.classList.toggle("is-rotated-quarter", rotatedQuarter);
 
     if (rotatedQuarter && this.viewportEl) {
@@ -1497,11 +1571,12 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
       return;
     }
 
-    this.mediaEl.setCssProps({ "--og-media-crop-zoom": String(crop.zoom) });
-    this.mediaEl.setCssStyles({
-      objectPosition: `${crop.x}% ${crop.y}%`,
-      transformOrigin: `${crop.x}% ${crop.y}%`,
+    this.mediaEl.setCssProps({
+      "--og-media-crop-zoom": String(crop.zoom),
+      "--og-media-focus-x": `${crop.x - 50}%`,
+      "--og-media-focus-y": `${crop.y - 50}%`,
     });
+    this.mediaEl.setCssStyles({ objectPosition: `${crop.x}% ${crop.y}%` });
     this.zoomOutButtonEl?.toggleAttribute("disabled", crop.zoom <= 1);
   }
 
@@ -1562,6 +1637,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
       deltaY,
       this.viewportEl.clientWidth,
       this.viewportEl.clientHeight,
+      this.currentRotation,
     ));
   }
 
@@ -1614,8 +1690,18 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
       return;
     }
 
-    const nextState = await this.saveCrop(item, crop);
-    if (nextState.status === "unconfigured") {
+    let nextState: CaptionState;
+    try {
+      nextState = await this.saveCrop(item, crop);
+    } catch (error) {
+      this.reportError?.(`cannot save the crop of ${item.name}.`, error);
+      if (this.items[this.state.currentIndex] === item) {
+        this.applyCrop(this.captionState?.crop ?? DEFAULT_CROP);
+      }
+      return;
+    }
+
+    if (this.items[this.state.currentIndex] !== item || nextState.status === "unconfigured") {
       return;
     }
 
@@ -1717,8 +1803,15 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
       return;
     }
 
-    const nextState = await this.saveVideoPlayback(item, playback);
-    if (nextState.status === "unconfigured") {
+    let nextState: CaptionState;
+    try {
+      nextState = await this.saveVideoPlayback(item, playback);
+    } catch (error) {
+      this.reportError?.(`cannot save the playback settings of ${item.name}.`, error);
+      return;
+    }
+
+    if (this.items[this.state.currentIndex] !== item || nextState.status === "unconfigured") {
       return;
     }
 

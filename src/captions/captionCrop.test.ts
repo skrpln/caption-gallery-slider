@@ -5,6 +5,7 @@ import {
   normalizeCrop,
   panCrop,
   panCropByPixels,
+  rotateCropDelta,
   scaleCropZoom,
   zoomCrop,
 } from "./captionCrop";
@@ -36,6 +37,32 @@ describe("caption crop state", () => {
     expect(panCropByPixels({ x: 50, y: 50, zoom: 1 }, 100, -50, 500, 250)).toEqual({
       x: 30,
       y: 70,
+      zoom: 1,
+    });
+  });
+
+  it("turns screen movement into media axes for each rotation", () => {
+    const right = { x: 10, y: 0 };
+    expect(rotateCropDelta(right, 0)).toEqual({ x: 10, y: 0 });
+    expect(rotateCropDelta(right, 90)).toEqual({ x: 0, y: -10 });
+    expect(rotateCropDelta(right, 180)).toEqual({ x: -10, y: 0 });
+    expect(rotateCropDelta(right, 270)).toEqual({ x: 0, y: 10 });
+    expect(rotateCropDelta({ x: 0, y: 4 }, 90)).toEqual({ x: 4, y: 0 });
+    expect(rotateCropDelta(right, 450)).toEqual(rotateCropDelta(right, 90));
+    expect(rotateCropDelta(right, -90)).toEqual(rotateCropDelta(right, 270));
+  });
+
+  it("pans a quarter-turned media box along its own axes", () => {
+    // Dragging right over a 90 degree turn moves the crop along the element's
+    // vertical axis, measured against the swapped box height.
+    expect(panCropByPixels({ x: 50, y: 50, zoom: 1 }, 100, 0, 500, 250, 90)).toEqual({
+      x: 50,
+      y: 70,
+      zoom: 1,
+    });
+    expect(panCropByPixels({ x: 50, y: 50, zoom: 1 }, 100, -50, 500, 250, 180)).toEqual({
+      x: 70,
+      y: 30,
       zoom: 1,
     });
   });

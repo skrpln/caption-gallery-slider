@@ -22,6 +22,50 @@ export function buildCaptionPath(input: CaptionPathInput): string {
   return `${root}/${gallerySegment}/${targetType}-${hash}.md`;
 }
 
+/**
+ * Resolves `path` against folders that already exist, matching every segment
+ * case-insensitively. Obsidian's file index compares paths exactly, while the
+ * file systems on macOS and Windows do not, so a gallery renamed from `малыш`
+ * to `Малыш` must keep using the caption folder created under the old name
+ * instead of failing on a folder that "already exists".
+ *
+ * `listChildren` returns the child names of an existing folder ("" is the
+ * vault root) or `null` when nothing is there. Segments below the first
+ * missing folder keep the requested spelling.
+ */
+export function resolveExistingPath(
+  path: string,
+  listChildren: (folderPath: string) => readonly string[] | null,
+): string {
+  const resolved: string[] = [];
+  let folderPath: string | null = "";
+
+  for (const segment of path.split("/").filter(Boolean)) {
+    const children: readonly string[] | null = folderPath === null ? null : listChildren(folderPath);
+    const match: string | null = children ? matchPathSegment(children, segment) : null;
+    resolved.push(match ?? segment);
+    folderPath = match === null || folderPath === null
+      ? null
+      : (folderPath ? `${folderPath}/${match}` : match);
+  }
+
+  return resolved.join("/");
+}
+
+/** Finds the child name equal to `segment`, preferring an exact match. */
+export function matchPathSegment(children: readonly string[], segment: string): string | null {
+  if (children.includes(segment)) {
+    return segment;
+  }
+
+  const wanted = comparablePathSegment(segment);
+  return children.find((child) => comparablePathSegment(child) === wanted) ?? null;
+}
+
+function comparablePathSegment(value: string): string {
+  return value.normalize("NFC").toLowerCase();
+}
+
 export function createShortHash(value: string): string {
   let hash = 0x811c9dc5;
 

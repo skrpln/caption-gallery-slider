@@ -2,6 +2,14 @@
 
 All notable changes to Caption Gallery Slider are documented in this file.
 
+## Unreleased
+
+- Media with a panned crop now rotates around the viewport center; zoom still scales around the crop focus.
+- The rotate transition always turns clockwise, including the step from 270 back to 0.
+- Drag and WASD crop panning follow the screen after a quarter turn.
+- Caption note paths are resolved case-insensitively against existing vault folders, so a gallery id that changed case keeps its caption notes and rotation no longer fails silently.
+- Failed caption writes show a notice and roll the change back instead of leaving the gallery out of sync.
+
 ## 0.1.1
 
 Maintenance release ahead of the Community Plugins submission. Gallery syntax and behavior are unchanged.
