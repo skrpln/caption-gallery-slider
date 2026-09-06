@@ -62,6 +62,8 @@ The renderer should create a stable widget shell once and mutate only the parts 
 
 Use Obsidian CSS variables for color, border, radius, and typography. User-facing errors should render inline inside the widget.
 
+Create elements with Obsidian's `createEl`, `createDiv`, and `createSpan` helpers instead of `document.createElement`; the official `prefer-create-el` lint rule enforces this. Pass `cls`, `text`, and `attr` through the options object rather than assigning them afterwards.
+
 ## Cleanup
 
 Every DOM listener, pointer handler, timer, observer, and vault event subscription must be registered through an Obsidian `Component` or an equivalent cleanup path owned by the markdown post processor context.

@@ -21,7 +21,12 @@ Video-specific frontmatter playback settings remain a later Phase 4 step.
 
 `src/settings/settings.ts` owns pure settings data and normalization. It has no Obsidian runtime imports so it can be covered by unit tests. The stored default is intentionally empty: the user must choose a caption storage folder.
 
-`src/settings/ObsidianGallerySettingTab.ts` owns the Obsidian settings UI. The text field shows `Example: gallery_captions` as placeholder and suggests existing vault folders while typing. The committed value is normalized as a vault-relative folder path:
+`src/settings/ObsidianGallerySettingTab.ts` owns the Obsidian settings UI in two forms that share the texts of `CAPTION_FOLDER_SETTING`:
+
+- On Obsidian 1.13 and newer the tab returns the `Caption folder` definition from `getSettingDefinitions()`. Obsidian renders a `folder` control with its own vault folder suggester and lists the setting in the settings search. `getControlValue()` reads the stored path and `setControlValue()` normalizes and stores it without touching the vault: the caption service creates missing folders on the first write, so a value saved on every keystroke leaves no partial folders behind.
+- On older versions Obsidian calls `display()`, which builds the same setting imperatively: a text field with the placeholder `Example: gallery_captions` and a folder suggester. When a non-empty folder is committed by blur, Enter, or selecting a suggestion, the fallback creates missing folder segments immediately.
+
+In both forms the stored value is normalized as a vault-relative folder path:
 
 - trims whitespace;
 - converts backslashes to slashes;
@@ -29,7 +34,6 @@ Video-specific frontmatter playback settings remain a later Phase 4 step.
 - collapses repeated slashes;
 - keeps an empty value when the user clears the field.
 
-When a non-empty folder is committed by blur, Enter, or selecting a suggestion, the plugin creates missing folder segments immediately.
 
 ## Caption Paths
 
@@ -71,7 +75,7 @@ Layout:
 
 Clicking a configured empty caption panel clears the placeholder and focuses a contenteditable Markdown editor. The caption note is created only after the first non-empty input. After blur, the saved body is rendered as Markdown again.
 
-A caption note button lives in the top-right corner of the caption panel. It is hidden by default and appears on caption hover/focus. It opens the corresponding caption note in the main Obsidian workspace; clicking it may create an empty caption note.
+A caption note button lives in the top-right corner of the caption panel. It is hidden by default and appears on caption hover/focus. It opens the corresponding caption note in the main Obsidian workspace; clicking it may create an empty caption note. A plain click opens the note in the current tab; the modifiers follow Obsidian links through `Keymap.isModEvent`, so Cmd/Ctrl-click opens a new tab and the split and new-window combinations work too.
 
 Caption text uses a compact `1.15` line height and minimal top padding so the fixed caption area holds more Markdown content before scrolling. The rendered Markdown view uses `white-space: normal`, while inline editing uses `white-space: pre-wrap`; this prevents renderer-created whitespace nodes from becoming visual blank lines in preview mode. The renderer explicitly marks the caption content as `.markdown-rendered`, and then compacts Obsidian Markdown block wrappers such as `.el-p` and `.markdown-preview-section > div` after `MarkdownRenderer.render()`. CSS keeps the same compact rules as a fallback. Headings keep their Obsidian/theme font-size hierarchy while using compact block spacing inside the constrained caption panel.
 
@@ -106,6 +110,8 @@ Allowed runtime values are normalized to `0`, `90`, `180`, or `270` through modu
 
 The rendered CSS angle is kept apart from the stored value and only grows (`270` to `360` to `450`), so the `transform` transition always turns clockwise, including the step from `270` back to `0`. The helpers live in `src/media/mediaRotation.ts`. Each click turns one quarter from the visible angle, waits for the slide's caption state before the first turn, and only the latest save result is applied when clicks overlap.
 
+Showing a slide must not animate. `updateView()` resets rotation and crop under the `is-settling` class, which disables the media transition, and the class stays until the stored rotation and crop of the new slide are applied in `updateCaption()`; `settleMedia()` then flushes the style and turns the transition back on. Without this, a slide whose caption note stores `crop_zoom` above `1` first appeared at zoom `1` and zoomed in once the note had loaded.
+
 ## Markdown Links
 
 `src/captions/captionMarkdownRenderer.ts` wraps `MarkdownRenderer.render(app, markdown, containerEl, sourcePath, component)` and then binds rendered `a.internal-link` elements manually:
@@ -133,6 +139,7 @@ Temporary aliases keep old blocks readable: `plane -> plain`, `fit: cover -> vie
 Current unit coverage added in this phase:
 
 - caption folder normalization;
+- the caption folder setting definition: a `folder` control bound to the stored `gallerySaveDir` key;
 - deterministic caption paths;
 - different `gallery_id` namespaces;
 - image/video target prefixes;

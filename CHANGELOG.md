@@ -2,6 +2,13 @@
 
 All notable changes to Caption Gallery Slider are documented in this file.
 
+## Unreleased
+
+- The gallery DOM is built with Obsidian's `createEl`, `createDiv`, and `createSpan` helpers instead of `document.createElement`.
+- The settings tab declares its setting through `getSettingDefinitions()`, so the caption folder appears in the settings search of Obsidian 1.13 and newer. Older versions keep the imperative tab.
+- Showing a slide applies its stored rotation and crop without the transition, so the media no longer zooms or spins into place after the caption note loads.
+- Cmd/Ctrl-click on the caption note button opens the note in a new tab; the split and new-window modifiers work like on links.
+
 ## 0.1.2
 
 Rotation and caption storage fixes.

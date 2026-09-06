@@ -1,6 +1,6 @@
 // Documentation: [[documentation/phase-2-captions]], [[documentation/phase-4-video]], [[documentation/crop-controls]]
 
-import { App, normalizePath, TFile, TFolder, type Vault } from "obsidian";
+import { App, normalizePath, TFile, TFolder, type PaneType, type Vault } from "obsidian";
 import type { GalleryItem } from "../media/mediaTypes";
 import type { GalleryConfig } from "../parser/galleryBlockParser";
 import { DEFAULT_CROP, type CaptionCrop } from "./captionCrop";
@@ -290,7 +290,7 @@ export class ObsidianCaptionService {
     };
   }
 
-  async openCaption(config: GalleryConfig, item: GalleryItem): Promise<void> {
+  async openCaption(config: GalleryConfig, item: GalleryItem, newLeaf: PaneType | boolean = false): Promise<void> {
     const path = this.getCaptionPath(config, item);
     if (!path) {
       return;
@@ -303,7 +303,7 @@ export class ObsidianCaptionService {
     }
 
     if (file instanceof TFile) {
-      await this.app.workspace.getLeaf(false).openFile(file, { active: true });
+      await this.app.workspace.getLeaf(newLeaf).openFile(file, { active: true });
     }
   }
 

@@ -55,7 +55,7 @@ export default class ObsidianGalleryPlugin extends Plugin {
         rotateCaption: (item, rotation) => captionService.rotateCaption(parseResult.config, item, rotation),
         saveCrop: (item, crop) => captionService.saveCrop(parseResult.config, item, crop),
         saveVideoPlayback: (item, playback) => captionService.saveVideoPlayback(parseResult.config, item, playback),
-        openCaption: (item) => captionService.openCaption(parseResult.config, item),
+        openCaption: (item, newLeaf) => captionService.openCaption(parseResult.config, item, newLeaf),
         saveSizeOption: async (option, value) => {
           try {
             currentSource = await updateGalleryBlockSizeOption(this.app, ctx, el, currentSource, option, value);

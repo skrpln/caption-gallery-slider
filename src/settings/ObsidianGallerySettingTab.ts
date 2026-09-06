@@ -1,9 +1,20 @@
 // Documentation: [[documentation/phase-2-captions]]
 
-import { AbstractInputSuggest, App, Notice, Plugin, PluginSettingTab, Setting, TFolder, type TextComponent } from "obsidian";
+import {
+  AbstractInputSuggest,
+  App,
+  Notice,
+  Plugin,
+  PluginSettingTab,
+  Setting,
+  TFolder,
+  type SettingDefinitionItem,
+  type TextComponent,
+} from "obsidian";
 import { ensureFolderPath } from "../captions/obsidianCaptionService";
 import {
-  DEFAULT_GALLERY_SAVE_DIR,
+  CAPTION_FOLDER_SETTING,
+  captionFolderSettingDefinition,
   normalizeGallerySaveDir,
   type ObsidianGallerySettings,
 } from "./settings";
@@ -18,27 +29,49 @@ export class ObsidianGallerySettingTab extends PluginSettingTab {
     super(app, plugin);
   }
 
+  /**
+   * Obsidian 1.13 and newer render the tab from these definitions and list
+   * them in the settings search. `display()` is not called on those versions.
+   */
+  getSettingDefinitions(): SettingDefinitionItem<keyof ObsidianGallerySettings>[] {
+    return [captionFolderSettingDefinition()];
+  }
+
+  getControlValue(key: string): unknown {
+    return key === "gallerySaveDir" ? this.plugin.settings.gallerySaveDir : undefined;
+  }
+
+  async setControlValue(key: string, value: unknown): Promise<void> {
+    if (key !== "gallerySaveDir" || typeof value !== "string") {
+      return;
+    }
+
+    // Missing folders are created by the caption service on the first write,
+    // so a value saved on every keystroke leaves no partial folders behind.
+    await this.saveCaptionFolder(value);
+  }
+
+  /** Imperative fallback for Obsidian older than 1.13, which has no declarative settings. */
   display(): void {
     this.containerEl.empty();
 
     new Setting(this.containerEl)
-      .setName("Caption folder")
-      .setDesc("Vault folder where gallery caption notes are stored.")
+      .setName(CAPTION_FOLDER_SETTING.name)
+      .setDesc(CAPTION_FOLDER_SETTING.desc)
       .addText((text) => {
         new FolderSuggest(this.app, text, async (path) => {
-          await this.persistCaptionFolder(path, text);
+          await this.commitCaptionFolder(path, text);
         });
 
         text
-          .setPlaceholder(`Example: ${DEFAULT_GALLERY_SAVE_DIR}`)
+          .setPlaceholder(CAPTION_FOLDER_SETTING.placeholder)
           .setValue(this.plugin.settings.gallerySaveDir)
           .onChange(async (value) => {
-            this.plugin.settings.gallerySaveDir = normalizeGallerySaveDir(value);
-            await this.plugin.saveSettings();
+            await this.saveCaptionFolder(value);
           });
 
         text.inputEl.addEventListener("blur", () => {
-          void this.persistCaptionFolder(text.getValue(), text);
+          void this.commitCaptionFolder(text.getValue(), text);
         });
 
         text.inputEl.addEventListener("keydown", (event) => {
@@ -50,12 +83,18 @@ export class ObsidianGallerySettingTab extends PluginSettingTab {
       });
   }
 
-  private async persistCaptionFolder(value: string, text: TextComponent): Promise<void> {
+  /** Normalizes and stores the folder path without touching the vault. */
+  private async saveCaptionFolder(value: string): Promise<string> {
     const path = normalizeGallerySaveDir(value);
-    text.setValue(path);
     this.plugin.settings.gallerySaveDir = path;
     await this.plugin.saveSettings();
+    return path;
+  }
 
+  /** Stores the folder path and creates the missing folders right away. */
+  private async commitCaptionFolder(value: string, text: TextComponent): Promise<void> {
+    const path = await this.saveCaptionFolder(value);
+    text.setValue(path);
     if (!path) {
       return;
     }

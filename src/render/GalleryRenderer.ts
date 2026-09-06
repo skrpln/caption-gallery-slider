@@ -1,6 +1,6 @@
 // Documentation: [[documentation/architecture]], [[documentation/phase-4-video]], [[documentation/widget-size-controls]], [[documentation/keyboard-navigation-backlog]], [[documentation/crop-controls]], [[documentation/overlay-controls-layout]]
 
-import { MarkdownRenderChild, setIcon, setTooltip } from "obsidian";
+import { Keymap, MarkdownRenderChild, setIcon, setTooltip, type PaneType } from "obsidian";
 import type { GalleryConfig } from "../parser/galleryBlockParser";
 import type { GallerySizeOption } from "../parser/galleryBlockEditor";
 import type { GalleryItem } from "../media/mediaTypes";
@@ -50,7 +50,8 @@ export interface GalleryRendererOptions {
   rotateCaption?: (item: GalleryItem, rotation: number) => Promise<CaptionState>;
   saveCrop?: (item: GalleryItem, crop: CaptionCrop) => Promise<CaptionState>;
   saveVideoPlayback?: (item: GalleryItem, playback: CaptionVideoPlayback) => Promise<CaptionState>;
-  openCaption?: (item: GalleryItem) => Promise<void>;
+  /** Opens the caption note; `newLeaf` follows the modifier keys of the click. */
+  openCaption?: (item: GalleryItem, newLeaf: PaneType | boolean) => Promise<void>;
   saveSizeOption?: (option: GallerySizeOption, value: number) => Promise<void>;
   renderCaptionMarkdown?: (
     markdown: string,
@@ -98,7 +99,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   private readonly rotateCaption: ((item: GalleryItem, rotation: number) => Promise<CaptionState>) | null;
   private readonly saveCrop: ((item: GalleryItem, crop: CaptionCrop) => Promise<CaptionState>) | null;
   private readonly saveVideoPlayback: ((item: GalleryItem, playback: CaptionVideoPlayback) => Promise<CaptionState>) | null;
-  private readonly openCaption: ((item: GalleryItem) => Promise<void>) | null;
+  private readonly openCaption: ((item: GalleryItem, newLeaf: PaneType | boolean) => Promise<void>) | null;
   private readonly saveSizeOption: ((option: GallerySizeOption, value: number) => Promise<void>) | null;
   private readonly renderCaptionMarkdown: GalleryRendererOptions["renderCaptionMarkdown"] | null;
   private readonly activateKeyboardTarget: ((target: GalleryKeyboardTarget) => void) | null;
@@ -187,8 +188,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   private render(): void {
     this.containerEl.empty();
 
-    const root = document.createElement("div");
-    root.className = `og-gallery og-gallery--view-${this.config.view}`;
+    const root = createDiv({ cls: `og-gallery og-gallery--view-${this.config.view}` });
     root.setCssProps({
       "--og-view-height": `${this.config.viewHeight}px`,
       "--og-caption-height": `${this.config.captionHeight}px`,
@@ -296,9 +296,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   }
 
   private createFullscreenButton(): HTMLButtonElement {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "og-gallery__fullscreen";
+    const button = createEl("button", { cls: "og-gallery__fullscreen", attr: { type: "button" } });
     this.setButtonLabel(button, "fullscreen");
     button.textContent = "⛶";
     this.fullscreenButtonEl = button;
@@ -307,9 +305,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   }
 
   private createRotateButton(): HTMLButtonElement {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "og-gallery__rotate";
+    const button = createEl("button", { cls: "og-gallery__rotate", attr: { type: "button" } });
     this.setButtonLabel(button, "rotate");
     button.textContent = "↻";
     this.rotateButtonEl = button;
@@ -322,9 +318,10 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   }
 
   private createCropZoomButton(kind: "in" | "out"): HTMLButtonElement {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = `og-gallery__crop-zoom og-gallery__crop-zoom--${kind}`;
+    const button = createEl("button", {
+      cls: `og-gallery__crop-zoom og-gallery__crop-zoom--${kind}`,
+      attr: { type: "button" },
+    });
     this.setButtonLabel(button, kind === "in" ? "zoom in" : "zoom out");
     setIcon(button, kind === "in" ? "plus" : "minus");
     this.registerDomEvent(button, "click", (event: MouseEvent) => {
@@ -341,8 +338,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   }
 
   private createMediaActions(): HTMLElement {
-    const actionsEl = document.createElement("div");
-    actionsEl.className = "og-gallery__media-actions";
+    const actionsEl = createDiv({ cls: "og-gallery__media-actions" });
     this.mediaActionsEl = actionsEl;
     actionsEl.append(
       this.createCropZoomButton("in"),
@@ -353,14 +349,12 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   }
 
   private createNavigation(): HTMLElement {
-    const navEl = document.createElement("div");
-    navEl.className = "og-gallery__nav";
+    const navEl = createDiv({ cls: "og-gallery__nav" });
     this.navEl = navEl;
     this.dotEls = [];
     this.previewButtonEls = [];
 
-    const previewEl = document.createElement("div");
-    previewEl.className = "og-gallery__preview";
+    const previewEl = createDiv({ cls: "og-gallery__preview" });
     this.registerDomEvent(previewEl, "wheel", (event: WheelEvent) => {
       const primaryDelta = Math.abs(event.deltaX) >= Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
       if (Math.abs(primaryDelta) < 1) {
@@ -373,27 +367,24 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     });
 
     this.items.forEach((item, index) => {
-      const previewButtonEl = document.createElement("button");
-      previewButtonEl.type = "button";
-      previewButtonEl.className = "og-gallery__preview-item";
+      const previewButtonEl = createEl("button", { cls: "og-gallery__preview-item", attr: { type: "button" } });
       this.registerDomEvent(previewButtonEl, "click", () => this.goTo(index));
 
       const resourcePath = this.getResourcePath(item.path);
       if (resourcePath) {
         if (item.kind === "video") {
           previewButtonEl.classList.add("is-video");
-          const videoEl = document.createElement("video");
+          const videoEl = createEl("video");
           videoEl.src = buildVideoPreviewSrc(resourcePath);
           videoEl.muted = true;
           videoEl.playsInline = true;
           videoEl.preload = "metadata";
           videoEl.setAttribute("aria-hidden", "true");
-          const playIconEl = document.createElement("span");
-          playIconEl.className = "og-gallery__preview-play";
+          const playIconEl = createSpan({ cls: "og-gallery__preview-play" });
           setIcon(playIconEl, "play");
           previewButtonEl.append(videoEl, playIconEl);
         } else {
-          const imageEl = document.createElement("img");
+          const imageEl = createEl("img");
           imageEl.src = resourcePath;
           imageEl.alt = "";
           imageEl.loading = "lazy";
@@ -401,8 +392,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
           previewButtonEl.appendChild(imageEl);
         }
       } else {
-        const placeholderEl = document.createElement("span");
-        placeholderEl.textContent = item.name.slice(0, 3);
+        const placeholderEl = createSpan({ text: item.name.slice(0, 3) });
         previewButtonEl.appendChild(placeholderEl);
       }
 
@@ -411,23 +401,19 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     });
 
     this.items.forEach((_item, index) => {
-      const dotEl = document.createElement("button");
-      dotEl.type = "button";
-      dotEl.className = "og-gallery__dot";
+      const dotEl = createEl("button", { cls: "og-gallery__dot", attr: { type: "button" } });
       this.registerDomEvent(dotEl, "click", () => this.goTo(index));
       navEl.appendChild(dotEl);
       this.dotEls.push(dotEl);
     });
 
-    const railEl = document.createElement("div");
-    railEl.className = "og-gallery__nav-rail";
+    const railEl = createDiv({ cls: "og-gallery__nav-rail" });
     railEl.setAttribute("role", "slider");
     railEl.setAttribute("aria-valuemin", "1");
     railEl.setAttribute("aria-valuemax", String(this.items.length));
     railEl.tabIndex = 0;
 
-    const thumbEl = document.createElement("div");
-    thumbEl.className = "og-gallery__nav-thumb";
+    const thumbEl = createDiv({ cls: "og-gallery__nav-thumb" });
     railEl.appendChild(thumbEl);
     navEl.appendChild(railEl);
     this.navRailEl = railEl;
@@ -482,8 +468,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   }
 
   private createViewport(): HTMLElement {
-    const viewportEl = document.createElement("div");
-    viewportEl.className = "og-gallery__viewport";
+    const viewportEl = createDiv({ cls: "og-gallery__viewport" });
     viewportEl.tabIndex = 0;
     this.viewportEl = viewportEl;
 
@@ -614,8 +599,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   }
 
   private createOverlayControls(): HTMLElement {
-    const overlayEl = document.createElement("div");
-    overlayEl.className = "og-gallery__overlay-controls";
+    const overlayEl = createDiv({ cls: "og-gallery__overlay-controls" });
     this.overlayControlsEl = overlayEl;
 
     this.registerDomEvent(overlayEl, "pointerdown", (event: PointerEvent) => {
@@ -635,8 +619,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   }
 
   private createVideoControls(): HTMLElement {
-    const controlsEl = document.createElement("div");
-    controlsEl.className = "og-gallery__video-controls";
+    const controlsEl = createDiv({ cls: "og-gallery__video-controls" });
     this.videoControlsEl = controlsEl;
 
     this.registerDomEvent(controlsEl, "pointerdown", (event: PointerEvent) => {
@@ -675,34 +658,31 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   }
 
   private createVideoProgress(): HTMLElement {
-    const progressEl = document.createElement("div");
-    progressEl.className = "og-gallery__video-progress";
+    const progressEl = createDiv({ cls: "og-gallery__video-progress" });
     progressEl.setAttribute("role", "slider");
     progressEl.setAttribute("aria-valuemin", "0");
     progressEl.setAttribute("aria-valuemax", "1000");
     progressEl.setAttribute("aria-valuenow", "0");
     progressEl.setAttribute("aria-valuetext", "00:00");
     progressEl.tabIndex = 0;
-    const progressLabelEl = document.createElement("span");
+    const progressLabelEl = createSpan();
     videoProgressLabelId += 1;
     progressLabelEl.id = `og-gallery-video-progress-${videoProgressLabelId}`;
     progressLabelEl.className = "og-gallery__visually-hidden";
     progressLabelEl.textContent = "Video position";
     progressEl.setAttribute("aria-labelledby", progressLabelEl.id);
-    const progressRangeEl = document.createElement("div");
-    progressRangeEl.className = "og-gallery__video-progress-range";
-    const progressStartHandleEl = document.createElement("div");
-    progressStartHandleEl.className = "og-gallery__video-range-handle og-gallery__video-range-handle--start";
+    const progressRangeEl = createDiv({ cls: "og-gallery__video-progress-range" });
+    const progressStartHandleEl = createDiv({
+      cls: "og-gallery__video-range-handle og-gallery__video-range-handle--start",
+    });
     progressStartHandleEl.dataset.edge = "start";
-    const progressEndHandleEl = document.createElement("div");
-    progressEndHandleEl.className = "og-gallery__video-range-handle og-gallery__video-range-handle--end";
+    const progressEndHandleEl = createDiv({
+      cls: "og-gallery__video-range-handle og-gallery__video-range-handle--end",
+    });
     progressEndHandleEl.dataset.edge = "end";
-    const progressThumbEl = document.createElement("div");
-    progressThumbEl.className = "og-gallery__video-progress-thumb";
+    const progressThumbEl = createDiv({ cls: "og-gallery__video-progress-thumb" });
     progressEl.append(progressLabelEl, progressRangeEl, progressStartHandleEl, progressEndHandleEl, progressThumbEl);
-    const progressTooltipEl = document.createElement("div");
-    progressTooltipEl.className = "og-gallery__video-time-tooltip";
-    progressTooltipEl.textContent = "00:00";
+    const progressTooltipEl = createDiv({ cls: "og-gallery__video-time-tooltip", text: "00:00" });
     this.rootEl?.appendChild(progressTooltipEl);
 
     this.videoProgressEl = progressEl;
@@ -820,17 +800,14 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   }
 
   private createVideoButton(label: string, icon: string): HTMLButtonElement {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "og-gallery__video-button";
+    const button = createEl("button", { cls: "og-gallery__video-button", attr: { type: "button" } });
     this.setButtonLabel(button, label);
     setIcon(button, icon);
     return button;
   }
 
   private createControls(): HTMLElement {
-    const controlsEl = document.createElement("div");
-    controlsEl.className = "og-gallery__controls";
+    const controlsEl = createDiv({ cls: "og-gallery__controls" });
 
     const previousButton = createArrowButton("previous", "left");
     const nextButton = createArrowButton("next", "right");
@@ -844,29 +821,24 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   }
 
   private createCaption(): HTMLElement {
-    const captionEl = document.createElement("div");
-    captionEl.className = "og-gallery__caption";
+    const captionEl = createDiv({ cls: "og-gallery__caption" });
     this.setAccessibleTooltip(captionEl, "caption");
     this.captionEl = captionEl;
 
-    const contentEl = document.createElement("div");
-    contentEl.className = "og-gallery__caption-content";
+    const contentEl = createDiv({ cls: "og-gallery__caption-content" });
     contentEl.tabIndex = 0;
     this.captionContentEl = contentEl;
 
     // Hidden copies of a note line, one per reading mode. Themes style reading
     // view and Live Preview differently, so the caption measures the mode the
     // note is actually in instead of guessing.
-    const probeEl = document.createElement("div");
-    probeEl.className = "og-gallery__caption-probe";
+    const probeEl = createDiv({ cls: "og-gallery__caption-probe" });
     probeEl.setAttribute("aria-hidden", "true");
     probeEl.appendChild(createReadingProbe());
     probeEl.appendChild(createLivePreviewProbe());
     this.captionProbeEl = probeEl;
 
-    const openButtonEl = document.createElement("button");
-    openButtonEl.type = "button";
-    openButtonEl.className = "og-gallery__caption-open";
+    const openButtonEl = createEl("button", { cls: "og-gallery__caption-open", attr: { type: "button" } });
     this.setButtonLabel(openButtonEl, "caption note");
     setIcon(openButtonEl, "file-text");
     this.captionOpenButtonEl = openButtonEl;
@@ -901,7 +873,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     this.registerDomEvent(openButtonEl, "click", (event: MouseEvent) => {
       event.preventDefault();
       event.stopPropagation();
-      void this.openCurrentCaption();
+      void this.openCurrentCaption(Keymap.isModEvent(event));
     });
 
     captionEl.append(probeEl, contentEl, openButtonEl, resizeHandleEl);
@@ -909,8 +881,9 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   }
 
   private createResizeHandle(option: GallerySizeOption): HTMLElement {
-    const handleEl = document.createElement("div");
-    handleEl.className = `og-gallery__resize-handle og-gallery__resize-handle--${option === "view_height" ? "view" : "caption"}`;
+    const handleEl = createDiv({
+      cls: `og-gallery__resize-handle og-gallery__resize-handle--${option === "view_height" ? "view" : "caption"}`,
+    });
     handleEl.setAttribute("role", "separator");
     handleEl.setAttribute("aria-orientation", "horizontal");
 
@@ -1159,14 +1132,13 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     }
 
     // The media element may be reused for the next item, so reset rotation and
-    // crop without the transition: a new item must not spin or zoom into place.
+    // crop without the transition and keep transitions off until the stored
+    // state of the new item is applied: a slide must not spin or zoom into place.
     this.mediaEl?.classList.add("is-settling");
     this.currentRotation = 0;
     this.setVisualRotation(0);
     this.applyCrop(DEFAULT_CROP);
     this.applyVideoPlayback(DEFAULT_VIDEO_PLAYBACK);
-    void this.mediaEl?.offsetWidth;
-    this.mediaEl?.classList.remove("is-settling");
 
     this.dotEls.forEach((dotEl, index) => {
       dotEl.classList.toggle("is-active", index === this.state.currentIndex);
@@ -1190,6 +1162,9 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
       await this.updateCaption(item);
     } catch (error) {
       this.reportError?.(`cannot load the caption of ${item.name}.`, error);
+      if (this.items[this.state.currentIndex] === item) {
+        this.settleMedia();
+      }
     }
   }
 
@@ -1218,8 +1193,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   }
 
   private createImageElement(): HTMLImageElement {
-    const imageEl = document.createElement("img");
-    imageEl.className = "og-gallery__media";
+    const imageEl = createEl("img", { cls: "og-gallery__media" });
     imageEl.loading = "lazy";
     imageEl.decoding = "async";
     imageEl.draggable = false;
@@ -1231,8 +1205,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   }
 
   private createVideoElement(): HTMLVideoElement {
-    const videoEl = document.createElement("video");
-    videoEl.className = "og-gallery__media";
+    const videoEl = createEl("video", { cls: "og-gallery__media" });
     videoEl.preload = "metadata";
     videoEl.controls = false;
     videoEl.playsInline = true;
@@ -1317,6 +1290,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     this.applyRotation(this.captionState.rotation);
     this.applyCrop(this.captionState.crop);
     this.applyVideoPlayback(this.captionState.playback);
+    this.settleMedia();
 
     if (!this.captionEl || !this.captionContentEl) {
       return;
@@ -1337,8 +1311,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     if (!caption.body) {
       this.captionEl.classList.add("is-empty");
       this.captionContentEl.empty();
-      const placeholderEl = document.createElement("em");
-      placeholderEl.textContent = "Insert caption";
+      const placeholderEl = createEl("em", { text: "Insert caption" });
       this.captionContentEl.appendChild(placeholderEl);
       return;
     }
@@ -1473,13 +1446,13 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     }
   }
 
-  private async openCurrentCaption(): Promise<void> {
+  private async openCurrentCaption(newLeaf: PaneType | boolean): Promise<void> {
     const item = this.items[this.state.currentIndex];
     if (!item || !this.openCaption) {
       return;
     }
 
-    await this.openCaption(item);
+    await this.openCaption(item, newLeaf);
   }
 
   private async rotateCurrentMedia(): Promise<void> {
@@ -1542,6 +1515,17 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
    */
   private applyRotation(rotation: number): void {
     this.setVisualRotation(clockwiseRotationAngle(this.currentRotation, rotation));
+  }
+
+  /** Turns the media transitions back on once a state that must not animate is in place. */
+  private settleMedia(): void {
+    if (!this.mediaEl?.classList.contains("is-settling")) {
+      return;
+    }
+
+    // Flush the pending style so the state applied without transition sticks.
+    void this.mediaEl.offsetWidth;
+    this.mediaEl.classList.remove("is-settling");
   }
 
   private setVisualRotation(angle: number): void {
@@ -2052,14 +2036,14 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
 }
 
 function createArrowButton(label: string, direction: "left" | "right"): HTMLButtonElement {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = `og-gallery__arrow og-gallery__arrow--${direction === "left" ? "previous" : "next"}`;
+  const button = createEl("button", {
+    cls: `og-gallery__arrow og-gallery__arrow--${direction === "left" ? "previous" : "next"}`,
+    attr: { type: "button" },
+  });
   setButtonLabel(button, label);
 
   for (let index = 0; index < 3; index += 1) {
-    const iconEl = document.createElement("span");
-    iconEl.className = "og-gallery__arrow-icon";
+    const iconEl = createSpan({ cls: "og-gallery__arrow-icon" });
     setIcon(iconEl, direction === "left" ? "chevron-left" : "chevron-right");
     button.appendChild(iconEl);
   }
@@ -2091,17 +2075,13 @@ function isViewportControlTarget(target: EventTarget | null): boolean {
 }
 
 function createReadingProbe(): HTMLElement {
-  const scopeEl = document.createElement("div");
-  scopeEl.className = "og-gallery__caption-probe-reading markdown-preview-view markdown-rendered";
+  const scopeEl = createDiv({ cls: "og-gallery__caption-probe-reading markdown-preview-view markdown-rendered" });
 
-  const paragraphEl = document.createElement("p");
-  paragraphEl.className = "og-gallery__caption-probe-line";
+  const paragraphEl = createEl("p", { cls: "og-gallery__caption-probe-line" });
   scopeEl.appendChild(paragraphEl);
 
-  const listEl = document.createElement("ul");
-  listEl.className = "contains-task-list";
-  const itemEl = document.createElement("li");
-  itemEl.className = "task-list-item";
+  const listEl = createEl("ul", { cls: "contains-task-list" });
+  const itemEl = createEl("li", { cls: "task-list-item" });
   itemEl.appendChild(createProbeCheckbox());
   listEl.appendChild(itemEl);
   scopeEl.appendChild(listEl);
@@ -2110,25 +2090,17 @@ function createReadingProbe(): HTMLElement {
 }
 
 function createLivePreviewProbe(): HTMLElement {
-  const scopeEl = document.createElement("div");
-  scopeEl.className = "og-gallery__caption-probe-live markdown-source-view mod-cm6 is-live-preview";
+  const scopeEl = createDiv({ cls: "og-gallery__caption-probe-live markdown-source-view mod-cm6 is-live-preview" });
 
-  const editorEl = document.createElement("div");
-  editorEl.className = "cm-editor";
-  const scrollerEl = document.createElement("div");
-  scrollerEl.className = "cm-scroller";
-  const contentContainerEl = document.createElement("div");
-  contentContainerEl.className = "cm-contentContainer";
-  const contentEl = document.createElement("div");
-  contentEl.className = "cm-content";
+  const editorEl = createDiv({ cls: "cm-editor" });
+  const scrollerEl = createDiv({ cls: "cm-scroller" });
+  const contentContainerEl = createDiv({ cls: "cm-contentContainer" });
+  const contentEl = createDiv({ cls: "cm-content" });
 
-  const lineEl = document.createElement("div");
-  lineEl.className = "og-gallery__caption-probe-line cm-line";
+  const lineEl = createDiv({ cls: "og-gallery__caption-probe-line cm-line" });
 
-  const taskLineEl = document.createElement("div");
-  taskLineEl.className = "cm-line HyperMD-list-line HyperMD-list-line-1 HyperMD-task-line";
-  const labelEl = document.createElement("label");
-  labelEl.className = "task-list-label";
+  const taskLineEl = createDiv({ cls: "cm-line HyperMD-list-line HyperMD-list-line-1 HyperMD-task-line" });
+  const labelEl = createEl("label", { cls: "task-list-label" });
   labelEl.appendChild(createProbeCheckbox());
   taskLineEl.appendChild(labelEl);
 
@@ -2142,25 +2114,20 @@ function createLivePreviewProbe(): HTMLElement {
 }
 
 function createProbeCheckbox(): HTMLInputElement {
-  const checkboxEl = document.createElement("input");
-  checkboxEl.type = "checkbox";
-  checkboxEl.className = "task-list-item-checkbox";
+  const checkboxEl = createEl("input", { cls: "task-list-item-checkbox", attr: { type: "checkbox" } });
   checkboxEl.tabIndex = -1;
   checkboxEl.disabled = true;
   return checkboxEl;
 }
 
 function createMessage(message: string): HTMLElement {
-  const messageEl = document.createElement("div");
-  messageEl.className = "og-gallery__message";
-  messageEl.textContent = message;
+  const messageEl = createDiv({ cls: "og-gallery__message", text: message });
   return messageEl;
 }
 
 function appendEmphasisLine(containerEl: HTMLElement, text: string): void {
-  const lineEl = document.createElement("div");
-  const emphasisEl = document.createElement("em");
-  emphasisEl.textContent = text;
+  const lineEl = createDiv();
+  const emphasisEl = createEl("em", { text });
   lineEl.appendChild(emphasisEl);
   containerEl.appendChild(lineEl);
 }
