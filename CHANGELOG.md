@@ -2,7 +2,9 @@
 
 All notable changes to Caption Gallery Slider are documented in this file.
 
-## Unreleased
+## 0.1.2
+
+Rotation and caption storage fixes.
 
 - Media with a panned crop now rotates around the viewport center; zoom still scales around the crop focus.
 - The rotate transition always turns clockwise, including the step from 270 back to 0.

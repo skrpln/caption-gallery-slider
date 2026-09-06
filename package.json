@@ -1,6 +1,6 @@
 {
   "name": "caption-gallery-slider",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Native-feeling gallery slider for local images and videos with editable Markdown captions.",
   "main": "main.js",
   "type": "module",
