@@ -33,7 +33,7 @@
 
 .og-gallery__viewport,
 .og-gallery__media {
-  cursor: pointer;
+  cursor: var(--og-cursor, pointer);
 }
 
 .og-gallery__visually-hidden {
@@ -74,7 +74,7 @@
   padding: 0;
   font: inherit;
   line-height: 1;
-  cursor: pointer;
+  cursor: var(--og-cursor, pointer);
 }
 
 .og-gallery button.og-gallery__arrow {
@@ -83,9 +83,9 @@
   justify-content: center;
   width: 50%;
   height: var(--og-control-size);
-  border: 1px solid color-mix(in srgb, var(--og-border-color) 70%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--og-border-color) 70%, transparent);
   border-radius: 0;
-  background-color: var(--og-overlay-color) !important;
+  background-color: var(--og-overlay-color);
   color: var(--text-normal);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -104,7 +104,7 @@
   height: var(--og-media-button-size);
   border: 0;
   border-radius: var(--radius-s);
-  background: transparent !important;
+  background: transparent;
   color: var(--text-muted);
   font-size: 16px;
   line-height: 1;
@@ -135,7 +135,7 @@
   border: 0;
   border-radius: 999px;
   background: var(--text-muted);
-  cursor: pointer;
+  cursor: var(--og-cursor, pointer);
 }
 
 .og-gallery__preview {
@@ -158,10 +158,10 @@
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--og-border-color) 70%, transparent);
   border-radius: var(--radius-s);
-  background: var(--background-primary) !important;
+  background: var(--background-primary);
   color: var(--text-muted);
   line-height: 1;
-  cursor: pointer;
+  cursor: var(--og-cursor, pointer);
 }
 
 .og-gallery__preview-item img,
@@ -229,7 +229,7 @@
   display: none;
   width: 100%;
   height: var(--og-nav-thumb-height);
-  cursor: pointer;
+  cursor: var(--og-cursor, pointer);
   outline: none;
 }
 
@@ -295,7 +295,7 @@
   right: 0;
   left: 0;
   height: 6px;
-  cursor: ns-resize;
+  cursor: var(--og-cursor, ns-resize);
   touch-action: none;
 }
 
@@ -307,26 +307,33 @@
   bottom: 0;
 }
 
-.og-gallery.is-resizing,
+/* A resize drag owns the cursor for the whole panel. Every rule that sets a
+   cursor reads --og-cursor first, so this single declaration overrides them
+   all; elements that set no cursor of their own inherit it from the root. */
+.og-gallery.is-resizing {
+  --og-cursor: ns-resize;
+
+  cursor: ns-resize;
+}
+
 .og-gallery.is-resizing * {
-  cursor: ns-resize !important;
   user-select: none;
 }
 
 .og-gallery.is-crop-zooming .og-gallery__viewport,
 .og-gallery.is-crop-zooming .og-gallery__media {
-  cursor: move !important;
+  cursor: var(--og-cursor, move);
 }
 
 .og-gallery.is-crop-dragging .og-gallery__viewport,
 .og-gallery.is-crop-dragging .og-gallery__media {
-  cursor: grabbing !important;
+  cursor: var(--og-cursor, grabbing);
   user-select: none;
 }
 
 .og-gallery.is-crop-zooming .og-gallery__overlay-controls button,
 .og-gallery.is-crop-dragging .og-gallery__overlay-controls button {
-  cursor: pointer !important;
+  cursor: var(--og-cursor, pointer);
 }
 
 .og-gallery__viewport:focus-visible {
@@ -403,7 +410,7 @@
   height: var(--og-media-button-size);
   border: 0;
   border-radius: var(--radius-s);
-  background: transparent !important;
+  background: transparent;
   color: var(--text-muted);
   opacity: 0.82;
   transition: background-color 120ms ease, color 120ms ease, opacity 120ms ease;
@@ -426,7 +433,7 @@
   margin: calc((var(--og-media-button-size) - var(--og-nav-thumb-height)) / 2) 0;
   border-radius: 999px;
   background: transparent;
-  cursor: pointer;
+  cursor: var(--og-cursor, pointer);
   outline: none;
   opacity: 0.82;
 }
@@ -462,7 +469,7 @@
   top: 50%;
   width: 14px;
   height: calc(var(--og-media-button-size) - 2px);
-  cursor: ew-resize;
+  cursor: var(--og-cursor, ew-resize);
   transform: translate(-50%, -50%);
   touch-action: none;
 }
@@ -525,7 +532,6 @@
 .og-gallery button.og-gallery__video-button:focus-visible,
 .og-gallery__video-progress:focus-visible .og-gallery__video-progress-thumb,
 .og-gallery__nav-rail:focus-visible .og-gallery__nav-thumb {
-  border-color: var(--interactive-accent);
   opacity: 0.94;
 }
 
@@ -537,7 +543,7 @@
 .og-gallery button.og-gallery__rotate:focus-visible,
 .og-gallery button.og-gallery__video-button:hover,
 .og-gallery button.og-gallery__video-button:focus-visible {
-  background-color: var(--og-button-hover-color) !important;
+  background-color: var(--og-button-hover-color);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
@@ -580,11 +586,11 @@
   height: var(--og-media-button-size);
   border: 0;
   border-radius: var(--radius-s);
-  background: transparent !important;
+  background: transparent;
   color: var(--text-muted);
   font-size: 17px;
   line-height: 1;
-  opacity: 0;
+  opacity: 0.82;
   transition: background-color 120ms ease, opacity 120ms ease, color 120ms ease;
 }
 
@@ -597,12 +603,8 @@
   height: 15px;
 }
 
-.og-gallery__overlay-controls button {
-  opacity: 0.82 !important;
-}
-
-.og-gallery--view-fit .og-gallery__crop-zoom {
-  display: none !important;
+.og-gallery.og-gallery--view-fit button.og-gallery__crop-zoom {
+  display: none;
 }
 
 .og-gallery__viewport--overlay-normal .og-gallery__overlay-controls {
@@ -674,15 +676,15 @@
   display: none;
 }
 
-.og-gallery__arrow--previous {
-  border-left: 0 !important;
-  border-bottom: 0 !important;
+.og-gallery button.og-gallery__arrow.og-gallery__arrow--previous {
+  border-left: 0;
+  border-bottom: 0;
 }
 
-.og-gallery__arrow--next {
-  border-right: 0 !important;
-  border-bottom: 0 !important;
-  border-left: 0 !important;
+.og-gallery button.og-gallery__arrow.og-gallery__arrow--next {
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
 }
 
 .og-gallery__caption {
@@ -725,7 +727,7 @@
   padding: 3px calc(var(--og-caption-open-size) + 24px) 2px 12px;
   outline: none;
   white-space: normal;
-  cursor: text;
+  cursor: var(--og-cursor, text);
 }
 
 .og-gallery__caption.is-editing .og-gallery__caption-content {
@@ -734,40 +736,39 @@
 
 /* Body blocks never carry their own size, family, colour, or leading: the
    panel decides, exactly like a line in the editor. Headings keep the theme
-   scale, so a caption heading still reads as a heading. */
-.og-gallery__caption-content p,
-.og-gallery__caption-content ul,
-.og-gallery__caption-content ol,
-.og-gallery__caption-content li,
-.og-gallery__caption-content blockquote,
-.og-gallery__caption-content pre,
-.og-gallery__caption-content .el-p,
-.og-gallery__caption-content .el-ul,
-.og-gallery__caption-content .el-ol,
-.og-gallery__caption-content .el-blockquote,
-.og-gallery__caption-content .el-pre,
-.og-gallery__caption-content .markdown-preview-section,
-.og-gallery__caption-content .markdown-preview-section > div {
-  font-size: inherit !important;
-  font-family: inherit !important;
-  color: inherit !important;
-  line-height: inherit !important;
-  margin-block: 0 !important;
-  min-height: 0 !important;
+   scale, so a caption heading still reads as a heading. The caption content is
+   a rendered Markdown container, so the full chain from the gallery root is
+   what outranks the theme's own rules for these blocks. */
+.og-gallery .og-gallery__caption .og-gallery__caption-content :is(
+    p,
+    ul,
+    ol,
+    li,
+    blockquote,
+    pre,
+    .el-p,
+    .el-ul,
+    .el-ol,
+    .el-blockquote,
+    .el-pre,
+    .markdown-preview-section,
+    .markdown-preview-section > div
+  ) {
+  font-size: inherit;
+  font-family: inherit;
+  color: inherit;
+  line-height: inherit;
+  margin-block: 0;
+  min-height: 0;
 }
 
-.og-gallery__caption-content h1,
-.og-gallery__caption-content h2,
-.og-gallery__caption-content h3,
-.og-gallery__caption-content h4,
-.og-gallery__caption-content h5,
-.og-gallery__caption-content h6 {
-  margin-block: 0 !important;
-  min-height: 0 !important;
+.og-gallery .og-gallery__caption .og-gallery__caption-content :is(h1, h2, h3, h4, h5, h6) {
+  margin-block: 0;
+  min-height: 0;
 }
 
-.og-gallery__caption-content > :first-child {
-  margin-top: 0 !important;
+.og-gallery .og-gallery__caption .og-gallery__caption-content > :first-child {
+  margin-top: 0;
 }
 
 .og-gallery__caption-content input.task-list-item-checkbox {
@@ -776,7 +777,7 @@
   margin-block: 0;
   margin-inline-end: var(--og-caption-checkbox-margin, 0.6em);
   vertical-align: var(--og-caption-checkbox-align, baseline);
-  cursor: pointer;
+  cursor: var(--og-cursor, pointer);
 }
 
 .og-gallery__caption-content:focus-visible {
@@ -784,7 +785,7 @@
 }
 
 .og-gallery__caption.is-disabled .og-gallery__caption-content {
-  cursor: default;
+  cursor: var(--og-cursor, default);
 }
 
 .og-gallery button.og-gallery__caption-open {
@@ -801,9 +802,9 @@
   padding: 0;
   border: 1px solid color-mix(in srgb, var(--og-border-color) 70%, transparent);
   border-radius: var(--radius-s);
-  background: var(--background-primary) !important;
+  background: var(--background-primary);
   color: var(--text-muted);
-  cursor: pointer;
+  cursor: var(--og-cursor, pointer);
   opacity: 0;
   pointer-events: none;
   transition: opacity 120ms ease;
@@ -827,8 +828,8 @@
   height: 15px;
 }
 
-.og-gallery__caption-open.is-hidden {
-  display: none !important;
+.og-gallery button.og-gallery__caption-open.is-hidden {
+  display: none;
 }
 
 .og-gallery__caption.is-empty {
@@ -864,7 +865,7 @@
 }
 
 .og-gallery:fullscreen {
-  height: 100vh !important;
+  height: 100vh;
   border-radius: 0;
 }
 

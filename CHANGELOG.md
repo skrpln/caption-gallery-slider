@@ -2,6 +2,15 @@
 
 All notable changes to Caption Gallery Slider are documented in this file.
 
+## 0.1.4
+
+Maintenance release answering the community scorecard for 0.1.3. Gallery syntax and behavior are unchanged.
+
+- The stylesheet no longer uses `!important`. Rules that had to outrank a theme now do so through selector specificity, and the cursor shown during a resize drag comes from a single `--og-cursor` variable.
+- The buttons over the media fade in and out with the overlay that holds them, so hovering one now brightens it as the other gallery buttons do.
+- The build marks Node builtins external through `node:module` instead of the `builtin-modules` package, which is no longer a dependency.
+- Tagging a version builds, tests, and signs `main.js`, `manifest.json`, and `styles.css` on GitHub Actions, so the release assets carry artifact attestations.
+
 ## 0.1.3
 
 Obsidian DOM helpers, declarative settings, and slide display fixes.
