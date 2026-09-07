@@ -15,6 +15,8 @@ Project links: [[expectation]], [[plan]], [[progress_log]]
 - [[documentation/caption-rendering-case-study]] — article-ready note about caption Markdown rendering pitfalls, whitespace modes, and the final compact preview solution.
 - [[documentation/keyboard-navigation-backlog]] — implemented keyboard arrow navigation scope, fullscreen behavior, cleanup, and tests.
 - [[documentation/remote-media-sources]] — backlog architecture for direct remote image/video URLs and YouTube embeds.
+- [[documentation/stylesheet-specificity]] — how the stylesheet outranks Obsidian and community themes without `!important`, the `--og-cursor` variable, and the cascade harness.
+- [[documentation/release-pipeline]] — tag-driven GitHub Actions release, artifact attestations, version bump checklist, and asset verification.
 
 ## Planning
 

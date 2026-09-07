@@ -1,4 +1,4 @@
-// Documentation: [[documentation/architecture]], [[documentation/phase-4-video]], [[documentation/widget-size-controls]], [[documentation/keyboard-navigation-backlog]], [[documentation/crop-controls]], [[documentation/overlay-controls-layout]]
+// Documentation: [[documentation/architecture]], [[documentation/phase-4-video]], [[documentation/widget-size-controls]], [[documentation/keyboard-navigation-backlog]], [[documentation/crop-controls]], [[documentation/overlay-controls-layout]], [[documentation/stylesheet-specificity]]
 
 import { Keymap, MarkdownRenderChild, setIcon, setTooltip, type PaneType } from "obsidian";
 import type { GalleryConfig } from "../parser/galleryBlockParser";
