@@ -17,6 +17,7 @@ Project links: [[expectation]], [[plan]], [[progress_log]]
 - [[documentation/keyboard-navigation-backlog]] — implemented keyboard arrow navigation scope, fullscreen behavior, cleanup, and tests.
 - [[documentation/remote-media-sources]] — backlog architecture for direct remote image/video URLs and YouTube embeds.
 - [[documentation/stylesheet-specificity]] — how the stylesheet outranks Obsidian and community themes without `!important`, the `--og-cursor` variable, and the cascade harness.
+- [[documentation/popout-windows]] — `el.doc`, `targetNode`, `instanceOf`, and per-document listeners that keep galleries working in Obsidian popout windows.
 - [[documentation/release-pipeline]] — tag-driven GitHub Actions release, artifact attestations, version bump checklist, and asset verification.
 
 ## Planning

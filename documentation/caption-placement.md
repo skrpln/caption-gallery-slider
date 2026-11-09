@@ -55,12 +55,18 @@ Top and bottom handles sit on the outer edges of their panels. A side caption re
 A side caption never squeezes the media below `MIN_SIDE_VIEW_WIDTH = 260px` and never gets narrower than `MIN_CAPTION_WIDTH = 180px`:
 
 1. The rendered width is `caption_size` clamped to `[180, widget width − 260]`. The stored value is kept, so the caption grows back when the widget gets wider again (for example after leaving fullscreen).
-2. When the widget is narrower than `180 + 260 = 440px`, the side caption moves to the bottom with the default height `60px`. A hover popover (`--popover-width: 450px` minus its padding) always lands here.
+2. When the widget is narrower than `180 + 260 = 440px`, the side caption moves to the bottom with the default height `60px`.
 3. In this fallback the caption resize handle is hidden: a height dragged there would be saved as `caption_size` and become the side width once the widget is wide again.
 
 A drag never triggers the fallback: the resolver clamps the drag at the same limits.
 
 The rule ignores a width of `0`, which means the widget is not in the DOM yet; the requested side is kept until the first measurement.
+
+## Hover Popover
+
+A hover popover (page preview, `.hover-popover`) shows the gallery in the placement the note asks for. A side caption keeps its side at any popover width and takes exactly half of the widget; the media gets the other half. `caption_size` and the narrow-widget rule above do not apply there, and the caption resize handle is hidden for the same reason as in the fallback. Top and bottom captions keep `caption_size`.
+
+The renderer checks `rootEl.closest(".hover-popover")` on every layout pass, because the popover inserts the rendered note after the gallery is built. `resolveCaptionLayout()` reports the source of the size as `mode`: `stored` (from `caption_size`, resizable), `fallback`, or `popover`; the root gets `is-caption-fixed` for the last two.
 
 ## Fullscreen
 
@@ -71,16 +77,16 @@ Fullscreen keeps the caption on its side. For `left` and `right` the grid rows b
 | File | Role |
 | --- | --- |
 | `src/parser/galleryBlockParser.ts` | `GalleryCaption = "bottom" \| "top" \| "left" \| "right" \| false`; `captionSize` resolves `caption_size`, legacy `caption_height`, and the per-axis default. |
-| `src/render/captionPlacement.ts` | Pure helpers. `resolveCaptionLayout(placement, size, widgetWidth)` returns the rendered placement, size, and fallback flag. `resizeHandleDelta(option, placement, dx, dy)` turns pointer movement into a size change. |
+| `src/render/captionPlacement.ts` | Pure helpers. `resolveCaptionLayout(placement, size, widgetWidth, inPopover)` returns the rendered placement, size, and mode (`stored`, `fallback`, `popover`). `resizeHandleDelta(option, placement, dx, dy)` turns pointer movement into a size change. |
 | `src/parser/galleryBlockEditor.ts` | `caption_size` source updates; renames `caption_height` like `height` → `view_height`. |
-| `src/render/GalleryRenderer.ts` | `updateCaptionLayout()` toggles one `og-gallery--caption-*` class, `is-caption-fallback`, and `--og-caption-size` on the root. `observeWidgetSize()` watches the root (placement) and the viewport (navigation layout, quarter-rotation box), because a side caption changes the viewport width without changing the root width. |
+| `src/render/GalleryRenderer.ts` | `updateCaptionLayout()` toggles one `og-gallery--caption-*` class, `is-caption-fixed`, and `--og-caption-size` on the root. `observeWidgetSize()` watches the root (placement) and the viewport (navigation layout, overlay controls, quarter-rotation box), because a side caption changes the viewport width without changing the root width. The observer is created by the gallery's own window, see [[documentation/popout-windows]]. |
 | `styles.css` | Bottom is the base flex column; `top` sets `order: -1` on the caption; `left`/`right` switch the root to a grid with `grid-template-areas`. |
 
 The top navigation measures the viewport instead of the root, so dots, rail, and preview thumbnails fit the narrower viewport of a side layout.
 
 ## Tests
 
-- `src/render/captionPlacement.test.ts`: axis clamps, minimum side width, shrinking to keep the media width, fallback threshold, unmeasured widget, handle directions.
+- `src/render/captionPlacement.test.ts`: axis clamps, minimum side width, shrinking to keep the media width, fallback threshold, unmeasured widget, half split in a hover popover, handle directions.
 - `src/parser/galleryBlockParser.test.ts`: every placement, `true`/`false`, normalization, per-axis defaults, `caption_size`, legacy `caption_height`, errors.
 - `src/parser/galleryBlockEditor.test.ts`: `caption_size` replace, insert, and `caption_height` rename.
 

@@ -6,7 +6,7 @@
 
 ## Что делает workflow
 
-Триггер — `push` любого тега. Шаги: `npm ci` → `npm test` → `npm run build` → `actions/attest-build-provenance@v2` → `gh release create --draft`.
+Триггер — `push` любого тега. Шаги на Node 24: `actions/checkout@v7` → `actions/setup-node@v7` → `npm ci` → `npm test` → `npm run build` → `actions/attest-build-provenance@v4` → `gh release create --draft`. С `0.2.0` все actions работают на Node 24, предупреждение GitHub о Node 20 больше не выводится.
 
 Права джоба:
 

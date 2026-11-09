@@ -974,10 +974,11 @@
   grid-template-rows: minmax(0, 1fr) var(--og-control-size);
 }
 
-/* A side caption moved to the bottom by a narrow widget keeps its stored
-   width, so the bottom panel cannot be resized: a height dragged here would
-   be saved as the side width. */
-.og-gallery.is-caption-fallback .og-gallery__resize-handle--caption {
+/* The caption size is set by the context, not by caption_size: a side
+   caption moved to the bottom of a narrow widget, or a side caption that
+   takes half of a hover popover. A dragged value would be saved as
+   caption_size for a layout it does not describe, so there is no handle. */
+.og-gallery.is-caption-fixed .og-gallery__resize-handle--caption {
   display: none;
 }
 

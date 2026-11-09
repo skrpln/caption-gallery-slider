@@ -27,7 +27,7 @@ The renderer does not own global keyboard listeners. It only exposes the `Galler
 `src/main.ts` owns the active target:
 
 - `activeGallery` stores the latest renderer that reported pointer or focus activity;
-- one plugin-level `document` `keydown` listener handles `ArrowLeft` and `ArrowRight`;
+- one plugin-level capture `keydown` handler handles `ArrowLeft` and `ArrowRight`; it is attached to the document of each window that holds an activated gallery, see [[documentation/popout-windows]];
 - the listener asks `activeGallery.canHandleKeyboard()` before preventing default behavior;
 - if the active renderer is stale or inactive, the listener clears `activeGallery`.
 

@@ -57,7 +57,7 @@ At least one media source is required:
 | `caption` | `bottom`, `top`, `left`, `right`, `false` | `bottom` | Places or hides the caption panel. `true` means `bottom`. |
 | `caption_size` | number | `60` for `bottom`/`top`, `300` for `left`/`right` | Caption panel thickness in pixels: height for `bottom`/`top`, width for `left`/`right`. |
 
-The other caption dimension follows the gallery: a bottom or top caption is as wide as the note, a side caption is as tall as the media and the arrows. A side caption needs a gallery at least 440 px wide; in a narrower one, such as a hover preview, it moves below the media. The older `caption_height` option still sets the height of a bottom or top caption.
+The other caption dimension follows the gallery: a bottom or top caption is as wide as the note, a side caption is as tall as the media and the arrows. A side caption needs a gallery at least 440 px wide; in a narrower one it moves below the media. In a hover preview a side caption stays on its side and takes half of the width. The older `caption_height` option still sets the height of a bottom or top caption.
 
 ## Caption Notes
 

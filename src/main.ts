@@ -1,4 +1,4 @@
-// Documentation: [[documentation/architecture]], [[documentation/widget-size-controls]], [[documentation/keyboard-navigation-backlog]], [[documentation/crop-controls]]
+// Documentation: [[documentation/architecture]], [[documentation/widget-size-controls]], [[documentation/keyboard-navigation-backlog]], [[documentation/crop-controls]], [[documentation/popout-windows]]
 
 import { Notice, Plugin, type App, type Editor, type MarkdownPostProcessorContext, type MarkdownSectionInformation } from "obsidian";
 import { createObsidianVaultAdapter, getObsidianResourcePath } from "./media/obsidianVaultAdapter";
@@ -22,6 +22,9 @@ const HOVER_SOURCE_ID = "caption-gallery-slider-caption";
 export default class ObsidianGalleryPlugin extends Plugin {
   settings: ObsidianGallerySettings = DEFAULT_SETTINGS;
   private activeGallery: GalleryKeyboardTarget | null = null;
+  /** Documents that already carry the gallery keydown listener; each popout window has its own. */
+  private readonly keyboardDocuments = new WeakSet<Document>();
+  private handleGalleryKeydown: ((event: KeyboardEvent) => void) | null = null;
 
   async onload(): Promise<void> {
     await this.loadSettings();
@@ -67,6 +70,7 @@ export default class ObsidianGalleryPlugin extends Plugin {
           renderCaptionMarkdown(this.app, markdown, containerEl, sourcePath, component, HOVER_SOURCE_ID),
         activateKeyboardTarget: (target) => {
           this.activeGallery = target;
+          this.listenForGalleryKeys(el.doc);
         },
         reportError: (message, error) => {
           console.error(`Caption Gallery Slider: ${message}`, error);
@@ -105,7 +109,7 @@ export default class ObsidianGalleryPlugin extends Plugin {
   }
 
   private registerGalleryKeyboardNavigation(): void {
-    const handleKeydown = (event: KeyboardEvent) => {
+    this.handleGalleryKeydown = (event: KeyboardEvent) => {
       const target = this.activeGallery;
       if (!target) {
         return;
@@ -116,7 +120,7 @@ export default class ObsidianGalleryPlugin extends Plugin {
         return;
       }
 
-      const textEditingActive = isTextEditingTarget(event.target);
+      const textEditingActive = isTextEditingEvent(event);
       const direction = getGalleryKeyboardDirection(event, {
         inputActive: true,
         pointerInside: false,
@@ -157,16 +161,30 @@ export default class ObsidianGalleryPlugin extends Plugin {
       }
     };
 
-    this.registerDomEvent(document, "keydown", handleKeydown, true);
+  }
+
+  /**
+   * Adds the capture keydown listener to the document of a gallery when the
+   * gallery becomes active. A gallery in a popout window lives in that
+   * window's document, which never sees keys pressed in the main window.
+   */
+  private listenForGalleryKeys(doc: Document): void {
+    if (!this.handleGalleryKeydown || this.keyboardDocuments.has(doc)) {
+      return;
+    }
+
+    this.keyboardDocuments.add(doc);
+    this.registerDomEvent(doc, "keydown", this.handleGalleryKeydown, true);
   }
 }
 
-function isTextEditingTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) {
+function isTextEditingEvent(event: KeyboardEvent): boolean {
+  const node = event.targetNode;
+  if (!node?.instanceOf(Element)) {
     return false;
   }
 
-  return Boolean(target.closest("input, textarea, select, .og-gallery__caption-content[contenteditable='true']"));
+  return Boolean(node.closest("input, textarea, select, .og-gallery__caption-content[contenteditable='true']"));
 }
 
 function renderInlineMessage(containerEl: HTMLElement, messages: string[]): void {

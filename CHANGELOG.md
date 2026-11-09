@@ -2,11 +2,17 @@
 
 All notable changes to Caption Gallery Slider are documented in this file.
 
-## Unreleased
+## 0.2.0
+
+Caption placement and popout window support.
 
 - `caption: bottom | top | left | right | false` places the caption panel on any side of the media; `caption: true` still means `bottom`. A side caption keeps portrait images at full height with the text beside them.
 - `caption_size` sets the caption thickness: height for top and bottom captions, width for side captions. The caption resize handle follows the placement, and the first resize renames an older `caption_height` line to `caption_size`.
-- A side caption moves below the media when the gallery is narrower than 440 px, for example in a hover preview.
+- A side caption moves below the media when the gallery is narrower than 440 px. In a hover preview it stays on its side and shares the width with the media half and half.
+- W/A/S/D move a zoomed media by the same screen distance horizontally and vertically: 5% of the longer pannable distance per press. Before, a wide viewport moved faster sideways.
+- Galleries in Obsidian popout windows keep their layout up to date: the size observer, animation frames, and timers come from the gallery's own window, so a side caption no longer stays at the bottom after the popout opens.
+- Galleries in Obsidian popout windows react to arrow and WASD keys, leave the active state on a click elsewhere in that window, toggle fullscreen, and put the caret at the end of the caption when editing starts. The plugin reaches the document of the gallery's own window and checks event targets with Obsidian's cross-window `instanceOf`.
+- The release workflow runs on Node 24 with `actions/checkout@v7`, `actions/setup-node@v7`, and `actions/attest-build-provenance@v4`.
 
 ## 0.1.4
 

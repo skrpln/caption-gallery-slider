@@ -9,21 +9,21 @@ import {
 
 describe("resolveCaptionLayout", () => {
   it("keeps top and bottom captions and clamps their height", () => {
-    expect(resolveCaptionLayout("bottom", 96, 700)).toEqual({ placement: "bottom", size: 96, fallback: false });
-    expect(resolveCaptionLayout("top", 4, 700)).toEqual({ placement: "top", size: MIN_CAPTION_HEIGHT, fallback: false });
-    expect(resolveCaptionLayout("top", 5000, 700)).toEqual({ placement: "top", size: 1400, fallback: false });
+    expect(resolveCaptionLayout("bottom", 96, 700)).toEqual({ placement: "bottom", size: 96, mode: "stored" });
+    expect(resolveCaptionLayout("top", 4, 700)).toEqual({ placement: "top", size: MIN_CAPTION_HEIGHT, mode: "stored" });
+    expect(resolveCaptionLayout("top", 5000, 700)).toEqual({ placement: "top", size: 1400, mode: "stored" });
   });
 
   it("keeps a side caption when the widget leaves room for the media", () => {
-    expect(resolveCaptionLayout("right", 300, 700)).toEqual({ placement: "right", size: 300, fallback: false });
-    expect(resolveCaptionLayout("left", 300, 700)).toEqual({ placement: "left", size: 300, fallback: false });
+    expect(resolveCaptionLayout("right", 300, 700)).toEqual({ placement: "right", size: 300, mode: "stored" });
+    expect(resolveCaptionLayout("left", 300, 700)).toEqual({ placement: "left", size: 300, mode: "stored" });
   });
 
   it("raises a side caption that is too narrow to its minimum width", () => {
     expect(resolveCaptionLayout("right", 60, 700)).toEqual({
       placement: "right",
       size: MIN_CAPTION_WIDTH,
-      fallback: false,
+      mode: "stored",
     });
   });
 
@@ -31,7 +31,7 @@ describe("resolveCaptionLayout", () => {
     expect(resolveCaptionLayout("left", 900, 700)).toEqual({
       placement: "left",
       size: 700 - MIN_SIDE_VIEW_WIDTH,
-      fallback: false,
+      mode: "stored",
     });
   });
 
@@ -41,14 +41,25 @@ describe("resolveCaptionLayout", () => {
     expect(resolveCaptionLayout("right", 300, threshold)).toEqual({
       placement: "right",
       size: MIN_CAPTION_WIDTH,
-      fallback: false,
+      mode: "stored",
     });
-    expect(resolveCaptionLayout("right", 300, threshold - 1)).toEqual({ placement: "bottom", size: 60, fallback: true });
-    expect(resolveCaptionLayout("left", 300, 420)).toEqual({ placement: "bottom", size: 60, fallback: true });
+    expect(resolveCaptionLayout("right", 300, threshold - 1)).toEqual({ placement: "bottom", size: 60, mode: "fallback" });
+    expect(resolveCaptionLayout("left", 300, 420)).toEqual({ placement: "bottom", size: 60, mode: "fallback" });
   });
 
   it("keeps the requested side while the widget is not measured yet", () => {
-    expect(resolveCaptionLayout("right", 300, 0)).toEqual({ placement: "right", size: 300, fallback: false });
+    expect(resolveCaptionLayout("right", 300, 0)).toEqual({ placement: "right", size: 300, mode: "stored" });
+  });
+
+  it("splits a hover popover in half between a side caption and the media", () => {
+    expect(resolveCaptionLayout("right", 300, 420, true)).toEqual({ placement: "right", size: 210, mode: "popover" });
+    expect(resolveCaptionLayout("left", 120, 301, true)).toEqual({ placement: "left", size: 151, mode: "popover" });
+    expect(resolveCaptionLayout("left", 300, 900, true)).toEqual({ placement: "left", size: 450, mode: "popover" });
+  });
+
+  it("leaves top and bottom captions in a hover popover as they are", () => {
+    expect(resolveCaptionLayout("bottom", 96, 420, true)).toEqual({ placement: "bottom", size: 96, mode: "stored" });
+    expect(resolveCaptionLayout("top", 80, 420, true)).toEqual({ placement: "top", size: 80, mode: "stored" });
   });
 });
 

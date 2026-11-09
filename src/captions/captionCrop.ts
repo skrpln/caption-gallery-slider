@@ -16,6 +16,7 @@ export const DEFAULT_CROP: CaptionCrop = {
 
 export const MIN_CROP_ZOOM = 1;
 export const MAX_CROP_ZOOM = 4;
+/** One W/A/S/D press moves the media by this percent of its longer pannable distance. */
 export const CROP_KEYBOARD_STEP = 5;
 export const CROP_ZOOM_STEP = 0.15;
 
@@ -39,6 +40,11 @@ export function panCrop(crop: CaptionCrop, deltaX: number, deltaY: number): Capt
 export interface CropDelta {
   x: number;
   y: number;
+}
+
+export interface CropSize {
+  width: number;
+  height: number;
 }
 
 /**
@@ -81,6 +87,56 @@ export function panCropByPixels(
     -(delta.x / safeWidth) * 100 / normalized.zoom,
     -(delta.y / safeHeight) * 100 / normalized.zoom,
   );
+}
+
+/**
+ * Distance in px that the crop can travel along each media box axis with
+ * `object-fit: cover`. Crop `x` and `y` sweep this distance from 0 to 100,
+ * so one percent moves the media by a hundredth of it. An unknown media size
+ * counts as media that fills the box exactly.
+ */
+export function cropPanRange(box: CropSize, media: CropSize, zoom: number): CropDelta {
+  const known = media.width > 0 && media.height > 0;
+  const scale = known ? Math.max(box.width / media.width, box.height / media.height) : 1;
+  const renderedWidth = known ? media.width * scale : box.width;
+  const renderedHeight = known ? media.height * scale : box.height;
+
+  return {
+    x: Math.max(0, zoom * renderedWidth - box.width),
+    y: Math.max(0, zoom * renderedHeight - box.height),
+  };
+}
+
+/**
+ * One W/A/S/D step. `direction` is a unit vector in screen axes. The media
+ * moves the same number of screen pixels on both axes: `CROP_KEYBOARD_STEP`
+ * percent of the longer pannable distance. A percent step on each axis would
+ * move a wide viewport faster sideways than up and down.
+ */
+export function panCropByKeyboard(
+  crop: CaptionCrop,
+  direction: CropDelta,
+  viewport: CropSize,
+  media: CropSize,
+  rotation = 0,
+): CaptionCrop {
+  const normalized = normalizeCrop(crop);
+  // For quarter turns the media box is laid out as viewport height x width.
+  const quarterTurn = normalizeRotation(rotation) % 180 !== 0;
+  const box = quarterTurn ? { width: viewport.height, height: viewport.width } : viewport;
+  const range = cropPanRange(box, media, normalized.zoom);
+  const longest = Math.max(range.x, range.y);
+  const delta = rotateCropDelta(direction, rotation);
+
+  return panCrop(
+    normalized,
+    stepPercent(delta.x, longest, range.x),
+    stepPercent(delta.y, longest, range.y),
+  );
+}
+
+function stepPercent(direction: number, longest: number, range: number): number {
+  return direction === 0 || range <= 0 ? 0 : direction * CROP_KEYBOARD_STEP * (longest / range);
 }
 
 export function zoomCrop(crop: CaptionCrop, zoomDelta: number): CaptionCrop {

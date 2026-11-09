@@ -1,4 +1,4 @@
-// Documentation: [[documentation/architecture]], [[documentation/phase-4-video]], [[documentation/widget-size-controls]], [[documentation/keyboard-navigation-backlog]], [[documentation/crop-controls]], [[documentation/overlay-controls-layout]], [[documentation/stylesheet-specificity]], [[documentation/caption-placement]]
+// Documentation: [[documentation/architecture]], [[documentation/phase-4-video]], [[documentation/widget-size-controls]], [[documentation/keyboard-navigation-backlog]], [[documentation/crop-controls]], [[documentation/overlay-controls-layout]], [[documentation/stylesheet-specificity]], [[documentation/caption-placement]], [[documentation/popout-windows]]
 
 import { Keymap, MarkdownRenderChild, setIcon, setTooltip, type PaneType } from "obsidian";
 import type { GalleryCaptionPlacement, GalleryConfig } from "../parser/galleryBlockParser";
@@ -10,15 +10,14 @@ import type { CaptionState } from "../captions/obsidianCaptionService";
 import { DEFAULT_VIDEO_PLAYBACK, type CaptionVideoPlayback } from "../captions/captionMarkdown";
 import { toggleCaptionTask } from "../captions/captionTasks";
 import {
-  CROP_KEYBOARD_STEP,
   CROP_ZOOM_STEP,
   DEFAULT_CROP,
-  panCrop,
+  panCropByKeyboard,
   panCropByPixels,
-  rotateCropDelta,
   scaleCropZoom,
   zoomCrop,
   type CaptionCrop,
+  type CropSize,
 } from "../captions/captionCrop";
 import {
   chooseTopNavigationLayout,
@@ -140,8 +139,10 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   private dotEls: HTMLButtonElement[] = [];
   private previewButtonEls: HTMLButtonElement[] = [];
   private navigationLayout: TopNavigationLayout = "dots";
-  private widgetResizeObserver: ResizeObserver | null = null;
-  private overlayControlsResizeObserver: ResizeObserver | null = null;
+  /** Size observer created by the window that holds the gallery; see observeWidgetSize(). */
+  private sizeObserver: ResizeObserver | null = null;
+  /** Documents that already report pointer presses outside this gallery. */
+  private readonly outsidePointerDocuments = new WeakSet<Document>();
   private overlayControlsLayout: OverlayControlsLayout = "normal";
   private draggingNavigation = false;
   private draggingVideoProgress = false;
@@ -188,7 +189,14 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
       this.clearCropDragTimer();
       this.clearCropPersistTimer();
       this.clearCropZoomCursorTimer();
+      this.sizeObserver?.disconnect();
+      this.sizeObserver = null;
     });
+  }
+
+  /** Window that holds the gallery: the main window or an Obsidian popout. */
+  private get win(): Window {
+    return this.containerEl.win;
   }
 
   private render(): void {
@@ -215,19 +223,21 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     if (captionEl) {
       root.appendChild(captionEl);
     }
-    this.updateCaptionLayout();
     this.observeWidgetSize();
+    this.register(root.onWindowMigrated(() => this.observeWidgetSize()));
     this.updateView();
   }
 
   private registerRootActivation(root: HTMLElement): void {
     this.registerDomEvent(root, "focusin", () => {
       this.setInputActive(true);
+      this.watchOutsidePointer(root);
       this.activateKeyboardTarget?.(this);
     });
 
     this.registerDomEvent(root, "pointerenter", () => {
       this.pointerInside = true;
+      this.watchOutsidePointer(root);
       this.activateKeyboardTarget?.(this);
     });
 
@@ -242,15 +252,31 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
 
     this.registerDomEvent(root, "pointerdown", () => {
       this.setInputActive(true);
+      this.watchOutsidePointer(root);
       this.activateKeyboardTarget?.(this);
     });
+  }
 
-    this.registerDomEvent(document, "pointerdown", (event: PointerEvent) => {
-      if (!(event.target instanceof Node)) {
+  /**
+   * Deactivates the gallery on a press anywhere else in its window. The
+   * listener goes to the document the gallery is in when it is first used:
+   * a gallery rendered for a popout window may still belong to the main
+   * document while it is being built.
+   */
+  private watchOutsidePointer(root: HTMLElement): void {
+    const doc = root.doc;
+    if (this.outsidePointerDocuments.has(doc)) {
+      return;
+    }
+
+    this.outsidePointerDocuments.add(doc);
+    this.registerDomEvent(doc, "pointerdown", (event: PointerEvent) => {
+      const target = event.targetNode;
+      if (!target) {
         return;
       }
 
-      const inside = root.contains(event.target);
+      const inside = root.contains(target);
       this.pointerInside = inside;
       this.setInputActive(inside);
     });
@@ -272,14 +298,32 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   }
 
   panCropFromKeyboard(direction: GalleryCropKeyboardDirection): boolean {
-    if (!this.canAdjustCrop()) {
+    if (!this.canAdjustCrop() || !this.viewportEl) {
       return false;
     }
 
-    const delta = rotateCropDelta(cropKeyboardDelta(direction), this.currentRotation);
-    this.applyCrop(panCrop(this.currentCrop, delta.x, delta.y));
+    this.applyCrop(panCropByKeyboard(
+      this.currentCrop,
+      cropKeyboardDirection(direction),
+      { width: this.viewportEl.clientWidth, height: this.viewportEl.clientHeight },
+      this.getMediaSize(),
+      this.currentRotation,
+    ));
     this.queuePersistCrop();
     return true;
+  }
+
+  /** Intrinsic size of the current media, or zero while it is not loaded. */
+  private getMediaSize(): CropSize {
+    if (this.mediaEl?.instanceOf(HTMLVideoElement)) {
+      return { width: this.mediaEl.videoWidth, height: this.mediaEl.videoHeight };
+    }
+
+    if (this.mediaEl?.instanceOf(HTMLImageElement)) {
+      return { width: this.mediaEl.naturalWidth, height: this.mediaEl.naturalHeight };
+    }
+
+    return { width: 0, height: 0 };
   }
 
   zoomCropFromKeyboard(direction: GalleryCropZoomDirection): boolean {
@@ -296,7 +340,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
       return false;
     }
 
-    const fullscreenElement = document.fullscreenElement;
+    const fullscreenElement = this.rootEl.doc.fullscreenElement;
     return fullscreenElement === this.rootEl || Boolean(fullscreenElement && this.rootEl.contains(fullscreenElement));
   }
 
@@ -498,9 +542,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
         event.stopPropagation();
         return;
       }
-      if (event.target instanceof HTMLElement && event.target.closest(
-        "button, .og-gallery__overlay-controls, .og-gallery__nav",
-      )) {
+      if (eventElement(event)?.closest("button, .og-gallery__overlay-controls, .og-gallery__nav")) {
         return;
       }
 
@@ -527,11 +569,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     });
 
     this.registerDomEvent(viewportEl, "wheel", (event: WheelEvent) => {
-      if (event.target instanceof HTMLElement && event.target.closest(".og-gallery__preview")) {
-        return;
-      }
-
-      if (event.target instanceof HTMLElement && event.target.closest(".og-gallery__overlay-controls")) {
+      if (eventElement(event)?.closest(".og-gallery__preview, .og-gallery__overlay-controls")) {
         return;
       }
 
@@ -598,7 +636,6 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     });
 
     viewportEl.append(fullscreenButton, overlayControlsEl, resizeHandleEl);
-    this.observeOverlayControlsLayout();
     return viewportEl;
   }
 
@@ -850,14 +887,12 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     this.captionResizeHandleEl = resizeHandleEl;
 
     this.registerDomEvent(contentEl, "click", (event: MouseEvent) => {
-      const target = event.target;
-      if (target instanceof HTMLElement && target.closest("a.internal-link")) {
+      const target = eventElement(event);
+      if (target?.closest("a.internal-link")) {
         return;
       }
 
-      const checkboxEl = target instanceof HTMLElement
-        ? target.closest<HTMLInputElement>("input.task-list-item-checkbox")
-        : null;
+      const checkboxEl = target?.closest<HTMLInputElement>("input.task-list-item-checkbox") ?? null;
       if (checkboxEl) {
         event.stopPropagation();
         void this.toggleCaptionTask(checkboxEl);
@@ -905,7 +940,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     event.stopPropagation();
 
     const layout = this.captionLayout;
-    if (option === "caption_size" && (!layout || layout.fallback)) {
+    if (option === "caption_size" && layout?.mode !== "stored") {
       return;
     }
 
@@ -975,8 +1010,8 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
 
     // The resolver clamps the size, so a drag stops at the minimum caption
     // width and at the minimum media width instead of switching placement.
-    const layout = resolveCaptionLayout(placement, value, this.rootEl?.clientWidth ?? 0);
-    if (layout.fallback) {
+    const layout = resolveCaptionLayout(placement, value, this.rootEl?.clientWidth ?? 0, this.isInHoverPopover());
+    if (layout.mode !== "stored") {
       return;
     }
 
@@ -987,7 +1022,8 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   /**
    * Applies the caption placement that fits the current widget width. A side
    * caption that leaves the media too little room moves to the bottom and gets
-   * back to its side once the widget is wide enough again.
+   * back to its side once the widget is wide enough again. In a hover popover
+   * a side caption stays on its side and takes half of the widget.
    */
   private updateCaptionLayout(): void {
     const requested = this.config.caption;
@@ -995,9 +1031,14 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
       return;
     }
 
-    const layout = resolveCaptionLayout(requested, this.config.captionSize, this.rootEl.clientWidth);
+    const layout = resolveCaptionLayout(
+      requested,
+      this.config.captionSize,
+      this.rootEl.clientWidth,
+      this.isInHoverPopover(),
+    );
     const current = this.captionLayout;
-    if (current?.placement === layout.placement && current.size === layout.size && current.fallback === layout.fallback) {
+    if (current?.placement === layout.placement && current.size === layout.size && current.mode === layout.mode) {
       return;
     }
 
@@ -1005,7 +1046,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     for (const placement of CAPTION_PLACEMENTS) {
       this.rootEl.classList.toggle(`og-gallery--caption-${placement}`, placement === layout.placement);
     }
-    this.rootEl.classList.toggle("is-caption-fallback", layout.fallback);
+    this.rootEl.classList.toggle("is-caption-fixed", layout.mode !== "stored");
     this.rootEl.setCssProps({ "--og-caption-size": `${layout.size}px` });
     this.captionResizeHandleEl?.setAttribute(
       "aria-orientation",
@@ -1023,8 +1064,9 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     }
 
     try {
-      if (document.fullscreenElement === this.rootEl) {
-        await document.exitFullscreen();
+      const doc = this.rootEl.doc;
+      if (doc.fullscreenElement === this.rootEl) {
+        await doc.exitFullscreen();
         return;
       }
 
@@ -1054,44 +1096,48 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   /**
    * Watches the widget and the viewport. The widget width decides the caption
    * placement; the viewport size, which a side caption changes on its own,
-   * decides the navigation layout and the box of quarter-rotated media.
+   * decides the navigation layout, the overlay controls layout, and the box of
+   * quarter-rotated media.
+   *
+   * The observer comes from the window that holds the gallery. An observer of
+   * the main window reports elements of a popout window only when the main
+   * window paints, so a popout gallery could keep the layout it got while the
+   * popout was still opening. Moving the gallery to another window creates a
+   * new observer there.
    */
-  private observeWidgetSize(): void {
-    if (!this.rootEl || typeof ResizeObserver === "undefined") {
-      return;
-    }
-
-    this.widgetResizeObserver?.disconnect();
-    this.widgetResizeObserver = new ResizeObserver(() => {
-      this.updateCaptionLayout();
-      this.updateNavigationLayout();
-      this.applyRotation(this.currentRotation);
-    });
-    this.widgetResizeObserver.observe(this.rootEl);
-    if (this.viewportEl) {
-      this.widgetResizeObserver.observe(this.viewportEl);
-    }
-    this.register(() => {
-      this.widgetResizeObserver?.disconnect();
-      this.widgetResizeObserver = null;
-    });
+  /**
+   * Whether the gallery is shown inside an Obsidian hover popover (page
+   * preview). Checked on every layout pass: the popover inserts the rendered
+   * note after the gallery is built.
+   */
+  private isInHoverPopover(): boolean {
+    return Boolean(this.rootEl?.closest(".hover-popover"));
   }
 
-  private observeOverlayControlsLayout(): void {
-    if (!this.viewportEl || typeof ResizeObserver === "undefined") {
-      this.updateOverlayControlsLayout();
+  private observeWidgetSize(): void {
+    const root = this.rootEl;
+    if (!root) {
       return;
     }
 
-    this.overlayControlsResizeObserver?.disconnect();
-    this.overlayControlsResizeObserver = new ResizeObserver(() => {
-      this.updateOverlayControlsLayout();
-    });
-    this.overlayControlsResizeObserver.observe(this.viewportEl);
-    this.register(() => {
-      this.overlayControlsResizeObserver?.disconnect();
-      this.overlayControlsResizeObserver = null;
-    });
+    this.sizeObserver?.disconnect();
+    this.sizeObserver = null;
+    const win = root.win as Window & typeof globalThis;
+    if (typeof win.ResizeObserver === "function") {
+      this.sizeObserver = new win.ResizeObserver(() => this.updateSizeLayouts());
+      this.sizeObserver.observe(root);
+      if (this.viewportEl) {
+        this.sizeObserver.observe(this.viewportEl);
+      }
+    }
+
+    this.updateSizeLayouts();
+  }
+
+  private updateSizeLayouts(): void {
+    this.updateCaptionLayout();
+    this.updateNavigationLayout();
+    this.applyRotation(this.currentRotation);
     this.updateOverlayControlsLayout();
   }
 
@@ -1183,10 +1229,10 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
       return;
     }
 
-    if (this.mediaEl instanceof HTMLImageElement) {
+    if (this.mediaEl?.instanceOf(HTMLImageElement)) {
       this.mediaEl.src = resourcePath;
       this.mediaEl.alt = item.name;
-    } else if (this.mediaEl instanceof HTMLVideoElement) {
+    } else if (this.mediaEl?.instanceOf(HTMLVideoElement)) {
       this.mediaEl.src = resourcePath;
       this.mediaEl.removeAttribute("aria-label");
       this.mediaEl.load();
@@ -1319,7 +1365,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
 
   private async updateCaption(item: GalleryItem): Promise<void> {
     this.syncCaptionTypography();
-    window.requestAnimationFrame(() => this.syncCaptionTypography());
+    this.win.requestAnimationFrame(() => this.syncCaptionTypography());
     const token = (this.captionRenderToken += 1);
     this.captionEditing = false;
     this.captionState = null;
@@ -1642,7 +1688,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   }
 
   private startCropPress(event: PointerEvent): void {
-    if (!this.canAdjustCrop() || event.button !== 0 || isViewportControlTarget(event.target)) {
+    if (!this.canAdjustCrop() || event.button !== 0 || isViewportControlTarget(event)) {
       return;
     }
 
@@ -1652,7 +1698,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
       lastX: event.clientX,
       lastY: event.clientY,
       activated: false,
-      timer: window.setTimeout(() => {
+      timer: this.win.setTimeout(() => {
         if (!this.cropDragState || this.cropDragState.pointerId !== event.pointerId || !this.viewportEl) {
           return;
         }
@@ -1715,7 +1761,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   private markCropZoomInteraction(): void {
     this.rootEl?.classList.add("is-crop-zooming");
     this.clearCropZoomCursorTimer();
-    this.cropZoomCursorTimer = window.setTimeout(() => {
+    this.cropZoomCursorTimer = this.win.setTimeout(() => {
       this.rootEl?.classList.remove("is-crop-zooming");
       this.cropZoomCursorTimer = null;
     }, CROP_INTERACTION_CURSOR_MS);
@@ -1723,7 +1769,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
 
   private queuePersistCrop(): void {
     this.clearCropPersistTimer();
-    this.cropPersistTimer = window.setTimeout(() => {
+    this.cropPersistTimer = this.win.setTimeout(() => {
       this.cropPersistTimer = null;
       void this.persistCrop(this.currentCrop);
     }, 260);
@@ -1760,21 +1806,21 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
 
   private clearCropDragTimer(): void {
     if (this.cropDragState?.timer) {
-      window.clearTimeout(this.cropDragState.timer);
+      this.win.clearTimeout(this.cropDragState.timer);
       this.cropDragState.timer = null;
     }
   }
 
   private clearCropPersistTimer(): void {
     if (this.cropPersistTimer) {
-      window.clearTimeout(this.cropPersistTimer);
+      this.win.clearTimeout(this.cropPersistTimer);
       this.cropPersistTimer = null;
     }
   }
 
   private clearCropZoomCursorTimer(): void {
     if (this.cropZoomCursorTimer) {
-      window.clearTimeout(this.cropZoomCursorTimer);
+      this.win.clearTimeout(this.cropZoomCursorTimer);
       this.cropZoomCursorTimer = null;
     }
   }
@@ -2074,11 +2120,11 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   }
 
   private getCurrentVideoElement(): HTMLVideoElement | null {
-    return this.mediaEl instanceof HTMLVideoElement ? this.mediaEl : null;
+    return this.mediaEl?.instanceOf(HTMLVideoElement) ? this.mediaEl : null;
   }
 
   private pauseCurrentVideo(): void {
-    if (this.mediaEl instanceof HTMLVideoElement) {
+    if (this.mediaEl?.instanceOf(HTMLVideoElement)) {
       this.mediaEl.pause();
     }
   }
@@ -2089,7 +2135,12 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   }
 
   private setAccessibleTooltip(element: HTMLElement, label: string): void {
-    const tooltip = registerAutoHidingTooltip(element, label, window, (targetEl, tooltipLabel) => {
+    // Timers resolve the window on each call, so a gallery moved to a popout keeps working.
+    const timers = {
+      setTimeout: (callback: () => void, delay: number) => this.win.setTimeout(callback, delay),
+      clearTimeout: (timeoutId: number) => this.win.clearTimeout(timeoutId),
+    };
+    const tooltip = registerAutoHidingTooltip(element, label, timers, (targetEl, tooltipLabel) => {
       setTooltip(targetEl, tooltipLabel, { classes: [AUTO_HIDING_TOOLTIP_CLASS] });
     });
     this.register(() => tooltip.destroy());
@@ -2116,21 +2167,32 @@ function setButtonLabel(button: HTMLButtonElement, label: string): void {
   setTooltipLabel(button, label);
 }
 
-function cropKeyboardDelta(direction: GalleryCropKeyboardDirection): { x: number; y: number } {
+/** Unit vector of a W/A/S/D direction in screen axes. */
+function cropKeyboardDirection(direction: GalleryCropKeyboardDirection): { x: number; y: number } {
   switch (direction) {
     case "up":
-      return { x: 0, y: -CROP_KEYBOARD_STEP };
+      return { x: 0, y: -1 };
     case "left":
-      return { x: -CROP_KEYBOARD_STEP, y: 0 };
+      return { x: -1, y: 0 };
     case "down":
-      return { x: 0, y: CROP_KEYBOARD_STEP };
+      return { x: 0, y: 1 };
     case "right":
-      return { x: CROP_KEYBOARD_STEP, y: 0 };
+      return { x: 1, y: 0 };
   }
 }
 
-function isViewportControlTarget(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement && Boolean(target.closest(
+/**
+ * Element an event started on. `targetNode` and `instanceOf` also work for
+ * nodes of Obsidian popout windows, where `instanceof` against the classes of
+ * the main window is always false. SVG icons inside buttons count as elements.
+ */
+function eventElement(event: UIEvent): Element | null {
+  const node = event.targetNode;
+  return node?.instanceOf(Element) ? node : null;
+}
+
+function isViewportControlTarget(event: UIEvent): boolean {
+  return Boolean(eventElement(event)?.closest(
     "button, .og-gallery__overlay-controls, .og-gallery__nav, .og-gallery__resize-handle",
   ));
 }
@@ -2198,12 +2260,13 @@ function readEditableText(contentEl: HTMLElement): string {
 }
 
 function placeCaretAtEnd(contentEl: HTMLElement): void {
-  const selection = window.getSelection();
+  // A popout window keeps its own selection, so use the window of the caption.
+  const selection = contentEl.win.getSelection();
   if (!selection) {
     return;
   }
 
-  const range = document.createRange();
+  const range = contentEl.doc.createRange();
   range.selectNodeContents(contentEl);
   range.collapse(false);
   selection.removeAllRanges();
