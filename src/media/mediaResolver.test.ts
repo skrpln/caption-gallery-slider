@@ -104,10 +104,10 @@ function config(overrides: Partial<GalleryConfig>): GalleryConfig {
     sort: "name",
     grid: { rows: 1, columns: 1 },
     viewHeight: 400,
-    captionHeight: 60,
+    captionSize: 60,
     navigation: "plain",
     view: "crop",
-    caption: true,
+    caption: "bottom",
     ...overrides,
   };
 }

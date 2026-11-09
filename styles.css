@@ -5,7 +5,7 @@
   --og-preview-size: 30px;
   --og-preview-gap: 4px;
   --og-view-height: 400px;
-  --og-caption-height: 60px;
+  --og-caption-size: 60px;
   --og-caption-line-height: 1.15;
   --og-nav-dot-size: 6px;
   --og-nav-dot-gap: 3px;
@@ -314,6 +314,12 @@
   --og-cursor: ns-resize;
 
   cursor: ns-resize;
+}
+
+.og-gallery.is-resizing.is-resizing-width {
+  --og-cursor: ew-resize;
+
+  cursor: ew-resize;
 }
 
 .og-gallery.is-resizing * {
@@ -689,9 +695,9 @@
 
 .og-gallery__caption {
   position: relative;
-  flex: 0 0 var(--og-caption-height);
+  flex: 0 0 var(--og-caption-size);
   width: 100%;
-  height: var(--og-caption-height);
+  height: var(--og-caption-size);
   border-top: 1px solid var(--og-border-color);
   border-radius: var(--radius-s);
   background: var(--background-primary);
@@ -872,5 +878,106 @@
 .og-gallery:fullscreen .og-gallery__viewport {
   flex: 1 1 auto;
   height: auto;
+}
+
+/* Caption placement: the renderer puts one og-gallery--caption-* class on the
+   root. Bottom is the base column above. Top only moves the caption to the
+   front. Left and right switch the root to a grid in which the caption spans
+   the viewport row and the arrows row, so the arrows stay under the media. */
+.og-gallery__viewport {
+  grid-area: viewport;
+}
+
+.og-gallery__controls {
+  grid-area: controls;
+}
+
+.og-gallery__caption {
+  grid-area: caption;
+}
+
+.og-gallery.og-gallery--caption-top .og-gallery__caption {
+  order: -1;
+  border-top: 0;
+  border-bottom: 1px solid var(--og-border-color);
+}
+
+.og-gallery.og-gallery--caption-top .og-gallery__resize-handle--view {
+  top: auto;
+  bottom: 0;
+}
+
+.og-gallery.og-gallery--caption-top .og-gallery__resize-handle--caption {
+  top: 0;
+  bottom: auto;
+}
+
+.og-gallery.og-gallery--caption-left,
+.og-gallery.og-gallery--caption-right {
+  display: grid;
+  grid-template-rows: var(--og-view-height) var(--og-control-size);
+  align-content: start;
+}
+
+.og-gallery.og-gallery--caption-left {
+  grid-template-columns: var(--og-caption-size) minmax(0, 1fr);
+  grid-template-areas:
+    "caption viewport"
+    "caption controls";
+}
+
+.og-gallery.og-gallery--caption-right {
+  grid-template-columns: minmax(0, 1fr) var(--og-caption-size);
+  grid-template-areas:
+    "viewport caption"
+    "controls caption";
+}
+
+.og-gallery.og-gallery--caption-left .og-gallery__caption,
+.og-gallery.og-gallery--caption-right .og-gallery__caption {
+  width: auto;
+  height: auto;
+  min-height: 0;
+  border-top: 0;
+}
+
+.og-gallery.og-gallery--caption-left .og-gallery__caption {
+  border-right: 1px solid var(--og-border-color);
+}
+
+.og-gallery.og-gallery--caption-right .og-gallery__caption {
+  border-left: 1px solid var(--og-border-color);
+}
+
+/* A side caption resizes from the edge it shares with the media. */
+.og-gallery.og-gallery--caption-left .og-gallery__resize-handle--caption,
+.og-gallery.og-gallery--caption-right .og-gallery__resize-handle--caption {
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  height: auto;
+  cursor: var(--og-cursor, ew-resize);
+}
+
+.og-gallery.og-gallery--caption-left .og-gallery__resize-handle--caption {
+  right: 0;
+  left: auto;
+}
+
+.og-gallery.og-gallery--caption-right .og-gallery__resize-handle--caption {
+  right: auto;
+  left: 0;
+}
+
+.og-gallery.og-gallery--caption-left:fullscreen,
+.og-gallery.og-gallery--caption-right:fullscreen {
+  grid-template-rows: minmax(0, 1fr) var(--og-control-size);
+}
+
+/* A side caption moved to the bottom by a narrow widget keeps its stored
+   width, so the bottom panel cannot be resized: a height dragged here would
+   be saved as the side width. */
+.og-gallery.is-caption-fallback .og-gallery__resize-handle--caption {
+  display: none;
 }
 

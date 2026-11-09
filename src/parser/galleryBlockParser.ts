@@ -1,8 +1,11 @@
-// Documentation: [[documentation/architecture]]
+// Documentation: [[documentation/architecture]], [[documentation/caption-placement]]
 
 export type GallerySort = "name" | "created" | "modified";
 export type GalleryNavigation = "plain" | "preview";
 export type GalleryView = "crop" | "fit";
+export type GalleryCaptionPlacement = "bottom" | "top" | "left" | "right";
+/** Where the caption panel sits, or `false` when the gallery has no caption panel. */
+export type GalleryCaption = GalleryCaptionPlacement | false;
 
 export interface GalleryGrid {
   rows: number;
@@ -16,10 +19,11 @@ export interface GalleryConfig {
   sort: GallerySort;
   grid: GalleryGrid;
   viewHeight: number;
-  captionHeight: number;
+  /** Caption panel thickness: height for `top`/`bottom`, width for `left`/`right`. */
+  captionSize: number;
   navigation: GalleryNavigation;
   view: GalleryView;
-  caption: boolean;
+  caption: GalleryCaption;
 }
 
 export interface GalleryParseSuccess {
@@ -37,13 +41,15 @@ export type GalleryParseResult = GalleryParseSuccess | GalleryParseFailure;
 const DEFAULT_SORT: GallerySort = "name";
 const DEFAULT_GRID: GalleryGrid = { rows: 1, columns: 1 };
 const DEFAULT_VIEW_HEIGHT = 400;
-const DEFAULT_CAPTION_HEIGHT = 60;
+export const DEFAULT_CAPTION_HEIGHT = 60;
+export const DEFAULT_CAPTION_WIDTH = 300;
 const DEFAULT_NAVIGATION: GalleryNavigation = "plain";
 const DEFAULT_VIEW: GalleryView = "crop";
-const DEFAULT_CAPTION = true;
+const DEFAULT_CAPTION: GalleryCaption = "bottom";
 const SORT_VALUES = new Set<GallerySort>(["name", "created", "modified"]);
 const NAVIGATION_VALUES = new Set<GalleryNavigation>(["plain", "preview"]);
 const VIEW_VALUES = new Set<GalleryView>(["crop", "fit"]);
+const CAPTION_PLACEMENT_VALUES = new Set<GalleryCaptionPlacement>(["bottom", "top", "left", "right"]);
 
 interface RawGalleryConfig {
   gallery_id?: string;
@@ -54,6 +60,7 @@ interface RawGalleryConfig {
   height?: string;
   view_height?: string;
   caption_height?: string;
+  caption_size?: string;
   navigation?: string;
   view?: string;
   fit?: string;
@@ -115,10 +122,10 @@ function validateRawGalleryConfig(raw: RawGalleryConfig): GalleryParseResult {
   const sort = parseSort(raw.sort, errors);
   const grid = parseGrid(raw.grid, errors);
   const viewHeight = parsePositiveNumber(raw.view_height ?? raw.height, "view_height", errors, DEFAULT_VIEW_HEIGHT);
-  const captionHeight = parsePositiveNumber(raw.caption_height, "caption_height", errors, DEFAULT_CAPTION_HEIGHT);
   const navigation = parseNavigation(raw.navigation, errors);
   const view = parseView(raw.view, raw.fit, errors);
-  const caption = parseBoolean(raw.caption, "caption", errors, DEFAULT_CAPTION);
+  const caption = parseCaption(raw.caption, errors);
+  const captionSize = parseCaptionSize(raw, caption, errors);
 
   if (!galleryId) {
     errors.push("`gallery_id` is required.");
@@ -145,7 +152,7 @@ function validateRawGalleryConfig(raw: RawGalleryConfig): GalleryParseResult {
       sort,
       grid,
       viewHeight,
-      captionHeight,
+      captionSize,
       navigation,
       view,
       caption,
@@ -256,22 +263,34 @@ function parseView(value: string | undefined, legacyFit: string | undefined, err
   return DEFAULT_VIEW;
 }
 
-function parseBoolean(value: string | undefined, key: string, errors: string[], fallback: boolean): boolean {
+function parseCaption(value: string | undefined, errors: string[]): GalleryCaption {
   const normalized = normalizeScalarValue(value);
-  if (!normalized) {
-    return fallback;
-  }
-
-  if (normalized === "true") {
-    return true;
+  if (!normalized || normalized === "true") {
+    return DEFAULT_CAPTION;
   }
 
   if (normalized === "false") {
     return false;
   }
 
-  errors.push(`\`${key}\` must be one of: \`true\`, \`false\`.`);
-  return fallback;
+  if (CAPTION_PLACEMENT_VALUES.has(normalized as GalleryCaptionPlacement)) {
+    return normalized as GalleryCaptionPlacement;
+  }
+
+  errors.push("`caption` must be one of: `bottom`, `top`, `left`, `right`, `false`.");
+  return DEFAULT_CAPTION;
+}
+
+/**
+ * `caption_size` is the panel thickness along the axis it shares with the media.
+ * Legacy `caption_height` keeps its literal meaning and applies to top and bottom captions only.
+ */
+function parseCaptionSize(raw: RawGalleryConfig, caption: GalleryCaption, errors: string[]): number {
+  const side = caption === "left" || caption === "right";
+  const fallback = side ? DEFAULT_CAPTION_WIDTH : DEFAULT_CAPTION_HEIGHT;
+  const legacyHeight = parsePositiveNumber(raw.caption_height, "caption_height", errors, DEFAULT_CAPTION_HEIGHT);
+  const sizeFallback = !side && raw.caption_height ? legacyHeight : fallback;
+  return parsePositiveNumber(raw.caption_size, "caption_size", errors, sizeFallback);
 }
 
 function normalizeScalarValue(value: string | undefined): string {
@@ -330,6 +349,7 @@ function isKnownScalarKey(key: string): key is keyof Omit<RawGalleryConfig, "lis
     "height",
     "view_height",
     "caption_height",
+    "caption_size",
     "navigation",
     "view",
     "fit",

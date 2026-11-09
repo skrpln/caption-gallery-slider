@@ -14,6 +14,7 @@ This release is desktop only. The interface relies on hover controls and pointer
 - Preview thumbnails, plain dot navigation, and adaptive slider navigation.
 - Video playback controls with play, mute, loop, progress, and saved fragment ranges.
 - `crop` and `fit` view modes, rotation, manual crop pan/zoom, and fullscreen view.
+- Caption panel below, above, left, or right of the media; a side caption suits portrait images.
 - Resize handles for the media viewport and caption panel.
 - Theme-aware UI based on Obsidian CSS variables.
 
@@ -29,7 +30,8 @@ sort: name
 navigation: preview
 view: crop
 view_height: 420
-caption_height: 96
+caption: bottom
+caption_size: 96
 ```
 ````
 
@@ -52,8 +54,10 @@ At least one media source is required:
 | `navigation` | `plain`, `preview` | `plain` | Selects top navigation style. |
 | `view` | `crop`, `fit` | `crop` | Controls how media fits the viewport. |
 | `view_height` | number | plugin default | Media viewport height in pixels. |
-| `caption_height` | number | plugin default | Caption panel height in pixels. |
-| `caption` | `true`, `false` | `true` | Shows or hides the caption panel. |
+| `caption` | `bottom`, `top`, `left`, `right`, `false` | `bottom` | Places or hides the caption panel. `true` means `bottom`. |
+| `caption_size` | number | `60` for `bottom`/`top`, `300` for `left`/`right` | Caption panel thickness in pixels: height for `bottom`/`top`, width for `left`/`right`. |
+
+The other caption dimension follows the gallery: a bottom or top caption is as wide as the note, a side caption is as tall as the media and the arrows. A side caption needs a gallery at least 440 px wide; in a narrower one, such as a hover preview, it moves below the media. The older `caption_height` option still sets the height of a bottom or top caption.
 
 ## Caption Notes
 

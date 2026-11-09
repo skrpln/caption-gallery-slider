@@ -40,11 +40,11 @@ Phase 1 accepts:
 - at least one of `dir` or `list`;
 - `sort: name | created | modified`;
 - `view_height` as a positive number;
-- `caption_height` as a positive number;
+- `caption_height` as a positive number (now legacy, see [[documentation/caption-placement]]);
 - `grid: 1,1`;
 - `navigation: plain`;
 - `view: crop | fit`;
-- `caption: true | false`.
+- `caption: true | false` (now also `bottom | top | left | right`, see [[documentation/caption-placement]]).
 
 Future options are parsed but rejected with inline messages when they are not part of Phase 1.
 

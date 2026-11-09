@@ -17,10 +17,10 @@ dir: Attachments/Vacation
         sort: "name",
         grid: { rows: 1, columns: 1 },
         viewHeight: 400,
-        captionHeight: 60,
+        captionSize: 60,
         navigation: "plain",
         view: "crop",
-        caption: true,
+        caption: "bottom",
       },
     });
   });
@@ -44,9 +44,9 @@ navigation: preview
       expect(result.config.list).toEqual(["Attachments/b.png", "Attachments/a.png"]);
       expect(result.config.sort).toBe("modified");
       expect(result.config.viewHeight).toBe(420);
-      expect(result.config.captionHeight).toBe(96);
+      expect(result.config.captionSize).toBe(96);
       expect(result.config.view).toBe("fit");
-      expect(result.config.caption).toBe(true);
+      expect(result.config.caption).toBe("bottom");
       expect(result.config.navigation).toBe("preview");
     }
   });
@@ -62,7 +62,7 @@ height: 480
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.config.viewHeight).toBe(480);
-      expect(result.config.captionHeight).toBe(60);
+      expect(result.config.captionSize).toBe(60);
     }
   });
 
@@ -96,7 +96,7 @@ caption: TRUE
     if (result.ok) {
       expect(result.config.sort).toBe("modified");
       expect(result.config.view).toBe("fit");
-      expect(result.config.caption).toBe(true);
+      expect(result.config.caption).toBe("bottom");
     }
   });
 
@@ -105,6 +105,7 @@ caption: TRUE
 sort: random
 view_height: -10
 caption_height: nope
+caption_size: 0
 view: stretch
 caption: maybe
 `);
@@ -117,8 +118,48 @@ caption: maybe
       expect(result.errors).toContain("`view_height` must be a positive number.");
       expect(result.errors).toContain("`caption_height` must be a positive number.");
       expect(result.errors).toContain("`view` must be one of: `crop`, `fit`.");
-      expect(result.errors).toContain("`caption` must be one of: `true`, `false`.");
+      expect(result.errors).toContain("`caption_size` must be a positive number.");
+      expect(result.errors).toContain("`caption` must be one of: `bottom`, `top`, `left`, `right`, `false`.");
     }
+  });
+
+  it("reads caption placement and keeps true as the bottom alias", () => {
+    const placements = ["bottom", "top", "left", "right"] as const;
+    for (const placement of placements) {
+      const result = parseGalleryBlock(`gallery_id: p\nlist:\n  - a.png\ncaption: ${placement}`);
+      expect(result.ok && result.config.caption).toBe(placement);
+    }
+
+    const shown = parseGalleryBlock("gallery_id: p\nlist:\n  - a.png\ncaption: true");
+    const hidden = parseGalleryBlock("gallery_id: p\nlist:\n  - a.png\ncaption: false");
+    const normalized = parseGalleryBlock("gallery_id: p\nlist:\n  - a.png\ncaption: Right.");
+    expect(shown.ok && shown.config.caption).toBe("bottom");
+    expect(hidden.ok).toBe(true);
+    expect(hidden.ok && hidden.config.caption).toBe(false);
+    expect(normalized.ok && normalized.config.caption).toBe("right");
+  });
+
+  it("defaults caption_size by placement axis", () => {
+    const side = parseGalleryBlock("gallery_id: p\nlist:\n  - a.png\ncaption: left");
+    const top = parseGalleryBlock("gallery_id: p\nlist:\n  - a.png\ncaption: top");
+    expect(side.ok && side.config.captionSize).toBe(300);
+    expect(top.ok && top.config.captionSize).toBe(60);
+  });
+
+  it("reads caption_size for every placement", () => {
+    const side = parseGalleryBlock("gallery_id: p\nlist:\n  - a.png\ncaption: right\ncaption_size: 280");
+    const bottom = parseGalleryBlock("gallery_id: p\nlist:\n  - a.png\ncaption_size: 84");
+    expect(side.ok && side.config.captionSize).toBe(280);
+    expect(bottom.ok && bottom.config.captionSize).toBe(84);
+  });
+
+  it("applies legacy caption_height only to top and bottom captions", () => {
+    const top = parseGalleryBlock("gallery_id: p\nlist:\n  - a.png\ncaption: top\ncaption_height: 96");
+    const side = parseGalleryBlock("gallery_id: p\nlist:\n  - a.png\ncaption: right\ncaption_height: 96");
+    const both = parseGalleryBlock("gallery_id: p\nlist:\n  - a.png\ncaption_height: 96\ncaption_size: 72");
+    expect(top.ok && top.config.captionSize).toBe(96);
+    expect(side.ok && side.config.captionSize).toBe(300);
+    expect(both.ok && both.config.captionSize).toBe(72);
   });
 
   it("rejects future-only grid options", () => {

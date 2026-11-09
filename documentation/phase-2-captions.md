@@ -66,9 +66,9 @@ The caption panel is rendered only when `caption` is enabled. In Phase 2 the par
 
 Layout:
 
-- position: directly below the previous/next button strip;
+- position: directly below the previous/next button strip by default; `caption: top | left | right` moves it, see [[documentation/caption-placement]];
 - width: full gallery width;
-- height: controlled by `caption_height`, default `60px`;
+- height: controlled by `caption_size` (legacy `caption_height`), default `60px`;
 - shape: theme-aware rounded rectangle;
 - empty state with configured storage: italic `Insert caption` placeholder;
 - empty state without configured storage: italic setup hint and inactive editor.
@@ -130,7 +130,7 @@ Phase 2 renames the public code block options:
 - `navigation: plain | preview` replaces the typo `navigation: plane`;
 - `view: crop | fit` replaces `fit: cover | contain`.
 - `view_height` controls the media viewport height and defaults to `400`;
-- `caption_height` controls the caption panel height and defaults to `60`.
+- `caption_height` controls the caption panel height and defaults to `60`. It is superseded by `caption_size` ([[documentation/caption-placement]]) and stays a legacy alias for top and bottom captions.
 
 Temporary aliases keep old blocks readable: `plane -> plain`, `fit: cover -> view: crop`, `fit: contain -> view: fit`, and `height -> view_height`.
 

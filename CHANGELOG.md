@@ -2,6 +2,12 @@
 
 All notable changes to Caption Gallery Slider are documented in this file.
 
+## Unreleased
+
+- `caption: bottom | top | left | right | false` places the caption panel on any side of the media; `caption: true` still means `bottom`. A side caption keeps portrait images at full height with the text beside them.
+- `caption_size` sets the caption thickness: height for top and bottom captions, width for side captions. The caption resize handle follows the placement, and the first resize renames an older `caption_height` line to `caption_size`.
+- A side caption moves below the media when the gallery is narrower than 440 px, for example in a hover preview.
+
 ## 0.1.4
 
 Maintenance release answering the community scorecard for 0.1.3. Gallery syntax and behavior are unchanged.

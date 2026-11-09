@@ -1,7 +1,7 @@
-// Documentation: [[documentation/architecture]], [[documentation/phase-4-video]], [[documentation/widget-size-controls]], [[documentation/keyboard-navigation-backlog]], [[documentation/crop-controls]], [[documentation/overlay-controls-layout]], [[documentation/stylesheet-specificity]]
+// Documentation: [[documentation/architecture]], [[documentation/phase-4-video]], [[documentation/widget-size-controls]], [[documentation/keyboard-navigation-backlog]], [[documentation/crop-controls]], [[documentation/overlay-controls-layout]], [[documentation/stylesheet-specificity]], [[documentation/caption-placement]]
 
 import { Keymap, MarkdownRenderChild, setIcon, setTooltip, type PaneType } from "obsidian";
-import type { GalleryConfig } from "../parser/galleryBlockParser";
+import type { GalleryCaptionPlacement, GalleryConfig } from "../parser/galleryBlockParser";
 import type { GallerySizeOption } from "../parser/galleryBlockEditor";
 import type { GalleryItem } from "../media/mediaTypes";
 import { clockwiseRotationAngle, counterclockwiseRotationAngle, normalizeRotation } from "../media/mediaRotation";
@@ -32,6 +32,7 @@ import {
 } from "./autoHidingTooltip";
 import type { GalleryCropKeyboardDirection, GalleryCropZoomDirection, GalleryKeyboardTarget } from "./keyboardNavigation";
 import { chooseOverlayControlsLayout, type OverlayControlsLayout } from "./overlayControlsLayout";
+import { isSideCaption, resizeHandleDelta, resolveCaptionLayout, type CaptionLayout } from "./captionPlacement";
 import {
   clampVideoRangeEdge,
   formatVideoProgressTime,
@@ -66,10 +67,13 @@ export interface GalleryRendererOptions {
 
 interface GalleryResizeState {
   option: GallerySizeOption;
+  /** Caption placement rendered when the drag started; it decides the drag direction. */
+  placement: GalleryCaptionPlacement;
   pointerId: number;
   handleEl: HTMLElement;
+  startX: number;
   startY: number;
-  startHeight: number;
+  startSize: number;
 }
 
 interface CropDragState {
@@ -83,8 +87,8 @@ interface CropDragState {
 type VideoRangeEdge = "start" | "end";
 
 const MIN_VIEW_HEIGHT = 120;
-const MIN_CAPTION_HEIGHT = 28;
 const MAX_GALLERY_SIZE = 1400;
+const CAPTION_PLACEMENTS: readonly GalleryCaptionPlacement[] = ["bottom", "top", "left", "right"];
 const CROP_LONG_PRESS_MS = 1000;
 const CROP_WHEEL_ZOOM_DIVISOR = 500;
 const CROP_INTERACTION_CURSOR_MS = 320;
@@ -111,6 +115,8 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   private captionContentEl: HTMLElement | null = null;
   private captionProbeEl: HTMLElement | null = null;
   private captionOpenButtonEl: HTMLButtonElement | null = null;
+  private captionResizeHandleEl: HTMLElement | null = null;
+  private captionLayout: CaptionLayout | null = null;
   private captionState: CaptionState | null = null;
   private fullscreenButtonEl: HTMLButtonElement | null = null;
   private overlayControlsEl: HTMLElement | null = null;
@@ -134,7 +140,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   private dotEls: HTMLButtonElement[] = [];
   private previewButtonEls: HTMLButtonElement[] = [];
   private navigationLayout: TopNavigationLayout = "dots";
-  private navigationResizeObserver: ResizeObserver | null = null;
+  private widgetResizeObserver: ResizeObserver | null = null;
   private overlayControlsResizeObserver: ResizeObserver | null = null;
   private overlayControlsLayout: OverlayControlsLayout = "normal";
   private draggingNavigation = false;
@@ -189,10 +195,7 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     this.containerEl.empty();
 
     const root = createDiv({ cls: `og-gallery og-gallery--view-${this.config.view}` });
-    root.setCssProps({
-      "--og-view-height": `${this.config.viewHeight}px`,
-      "--og-caption-height": `${this.config.captionHeight}px`,
-    });
+    root.setCssProps({ "--og-view-height": `${this.config.viewHeight}px` });
     this.rootEl = root;
     this.containerEl.appendChild(root);
     this.registerRootActivation(root);
@@ -212,6 +215,8 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     if (captionEl) {
       root.appendChild(captionEl);
     }
+    this.updateCaptionLayout();
+    this.observeWidgetSize();
     this.updateView();
   }
 
@@ -461,7 +466,6 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
       }
     });
 
-    this.observeNavigationSize();
     this.updateNavigationLayout();
     navEl.prepend(previewEl);
     return navEl;
@@ -842,7 +846,8 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     this.setButtonLabel(openButtonEl, "caption note");
     setIcon(openButtonEl, "file-text");
     this.captionOpenButtonEl = openButtonEl;
-    const resizeHandleEl = this.createResizeHandle("caption_height");
+    const resizeHandleEl = this.createResizeHandle("caption_size");
+    this.captionResizeHandleEl = resizeHandleEl;
 
     this.registerDomEvent(contentEl, "click", (event: MouseEvent) => {
       const target = event.target;
@@ -899,15 +904,23 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     event.preventDefault();
     event.stopPropagation();
 
-    const startHeight = option === "view_height" ? this.config.viewHeight : this.config.captionHeight;
+    const layout = this.captionLayout;
+    if (option === "caption_size" && (!layout || layout.fallback)) {
+      return;
+    }
+
+    const placement = layout?.placement ?? "bottom";
     this.resizeState = {
       option,
+      placement,
       pointerId: event.pointerId,
       handleEl,
+      startX: event.clientX,
       startY: event.clientY,
-      startHeight,
+      startSize: option === "view_height" ? this.config.viewHeight : layout?.size ?? this.config.captionSize,
     };
     this.rootEl?.classList.add("is-resizing");
+    this.rootEl?.classList.toggle("is-resizing-width", option === "caption_size" && isSideCaption(placement));
     handleEl.setPointerCapture(event.pointerId);
   }
 
@@ -919,11 +932,9 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     event.preventDefault();
     event.stopPropagation();
 
-    const deltaY = event.clientY - this.resizeState.startY;
-    const nextHeight = this.resizeState.option === "view_height"
-      ? this.resizeState.startHeight - deltaY
-      : this.resizeState.startHeight + deltaY;
-    this.applyGallerySize(this.resizeState.option, nextHeight);
+    const { option, placement, startX, startY, startSize } = this.resizeState;
+    const delta = resizeHandleDelta(option, placement, event.clientX - startX, event.clientY - startY);
+    this.applyGallerySize(option, startSize + delta);
   }
 
   private finishResize(event: PointerEvent, persist: boolean): void {
@@ -935,22 +946,21 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     event.stopPropagation();
 
     const { option, handleEl } = this.resizeState;
-    const nextValue = option === "view_height" ? this.config.viewHeight : this.config.captionHeight;
+    const nextValue = option === "view_height" ? this.config.viewHeight : this.config.captionSize;
     if (handleEl.hasPointerCapture(event.pointerId)) {
       handleEl.releasePointerCapture(event.pointerId);
     }
 
     this.resizeState = null;
-    this.rootEl?.classList.remove("is-resizing");
+    this.rootEl?.classList.remove("is-resizing", "is-resizing-width");
     if (persist) {
       void this.saveSizeOption?.(option, nextValue);
     }
   }
 
   private applyGallerySize(option: GallerySizeOption, value: number): void {
-    const min = option === "view_height" ? MIN_VIEW_HEIGHT : MIN_CAPTION_HEIGHT;
-    const nextValue = Math.round(clamp(value, min, MAX_GALLERY_SIZE));
     if (option === "view_height") {
+      const nextValue = Math.round(clamp(value, MIN_VIEW_HEIGHT, MAX_GALLERY_SIZE));
       this.config.viewHeight = nextValue;
       this.rootEl?.setCssProps({ "--og-view-height": `${nextValue}px` });
       this.applyRotation(this.currentRotation);
@@ -958,8 +968,49 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
       return;
     }
 
-    this.config.captionHeight = nextValue;
-    this.rootEl?.setCssProps({ "--og-caption-height": `${nextValue}px` });
+    const placement = this.config.caption;
+    if (!placement) {
+      return;
+    }
+
+    // The resolver clamps the size, so a drag stops at the minimum caption
+    // width and at the minimum media width instead of switching placement.
+    const layout = resolveCaptionLayout(placement, value, this.rootEl?.clientWidth ?? 0);
+    if (layout.fallback) {
+      return;
+    }
+
+    this.config.captionSize = layout.size;
+    this.updateCaptionLayout();
+  }
+
+  /**
+   * Applies the caption placement that fits the current widget width. A side
+   * caption that leaves the media too little room moves to the bottom and gets
+   * back to its side once the widget is wide enough again.
+   */
+  private updateCaptionLayout(): void {
+    const requested = this.config.caption;
+    if (!requested || !this.rootEl) {
+      return;
+    }
+
+    const layout = resolveCaptionLayout(requested, this.config.captionSize, this.rootEl.clientWidth);
+    const current = this.captionLayout;
+    if (current?.placement === layout.placement && current.size === layout.size && current.fallback === layout.fallback) {
+      return;
+    }
+
+    this.captionLayout = layout;
+    for (const placement of CAPTION_PLACEMENTS) {
+      this.rootEl.classList.toggle(`og-gallery--caption-${placement}`, placement === layout.placement);
+    }
+    this.rootEl.classList.toggle("is-caption-fallback", layout.fallback);
+    this.rootEl.setCssProps({ "--og-caption-size": `${layout.size}px` });
+    this.captionResizeHandleEl?.setAttribute(
+      "aria-orientation",
+      isSideCaption(layout.placement) ? "vertical" : "horizontal",
+    );
   }
 
   private setInputActive(active: boolean): void {
@@ -1000,20 +1051,29 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
     this.updateView();
   }
 
-  private observeNavigationSize(): void {
-    if (!this.navEl || !this.rootEl || typeof ResizeObserver === "undefined") {
+  /**
+   * Watches the widget and the viewport. The widget width decides the caption
+   * placement; the viewport size, which a side caption changes on its own,
+   * decides the navigation layout and the box of quarter-rotated media.
+   */
+  private observeWidgetSize(): void {
+    if (!this.rootEl || typeof ResizeObserver === "undefined") {
       return;
     }
 
-    this.navigationResizeObserver?.disconnect();
-    this.navigationResizeObserver = new ResizeObserver(() => {
+    this.widgetResizeObserver?.disconnect();
+    this.widgetResizeObserver = new ResizeObserver(() => {
+      this.updateCaptionLayout();
       this.updateNavigationLayout();
       this.applyRotation(this.currentRotation);
     });
-    this.navigationResizeObserver.observe(this.rootEl);
+    this.widgetResizeObserver.observe(this.rootEl);
+    if (this.viewportEl) {
+      this.widgetResizeObserver.observe(this.viewportEl);
+    }
     this.register(() => {
-      this.navigationResizeObserver?.disconnect();
-      this.navigationResizeObserver = null;
+      this.widgetResizeObserver?.disconnect();
+      this.widgetResizeObserver = null;
     });
   }
 
@@ -1076,9 +1136,10 @@ export class GalleryRenderer extends MarkdownRenderChild implements GalleryKeybo
   }
 
   private getNavigationAvailableWidth(): number {
-    const rootWidth = this.rootEl?.clientWidth ?? 0;
-    if (rootWidth > 0) {
-      return Math.max(0, rootWidth - 96);
+    // The navigation lives inside the viewport, which a side caption narrows.
+    const viewportWidth = this.viewportEl?.clientWidth ?? 0;
+    if (viewportWidth > 0) {
+      return Math.max(0, viewportWidth - 96);
     }
 
     return this.navEl?.clientWidth ?? 0;

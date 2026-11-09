@@ -9,7 +9,8 @@ Project links: [[expectation]], [[plan]], [[progress_log]]
 - [[documentation/phase-2-captions]] — caption settings, deterministic caption paths, caption panel layout, and Phase 2 test coverage.
 - [[documentation/phase-3-top-navigation]] — preview thumbnails, adaptive plain navigation, tooltip lifetime, and rotated crop behavior.
 - [[documentation/phase-4-video]] — video media resolution, custom playback controls, and caption frontmatter playback state.
-- [[documentation/widget-size-controls]] — direct resize handles for `view_height` and `caption_height`, source updates, and tooltip policy.
+- [[documentation/widget-size-controls]] — direct resize handles for `view_height` and `caption_size`, source updates, and tooltip policy.
+- [[documentation/caption-placement]] — `caption: bottom | top | left | right | false`, `caption_size` as panel thickness, side layout grid, narrow-widget fallback, and resize directions.
 - [[documentation/crop-controls]] — manual `view: crop` pan/zoom controls, caption frontmatter state, and keyboard routing.
 - [[documentation/overlay-controls-layout]] — responsive video/crop overlay controls layout for normal, popup, ultra-compact, and hidden modes.
 - [[documentation/caption-rendering-case-study]] — article-ready note about caption Markdown rendering pitfalls, whitespace modes, and the final compact preview solution.

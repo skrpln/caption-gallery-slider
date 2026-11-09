@@ -1,6 +1,12 @@
-// Documentation: [[documentation/widget-size-controls]]
+// Documentation: [[documentation/widget-size-controls]], [[documentation/caption-placement]]
 
-export type GallerySizeOption = "view_height" | "caption_height";
+export type GallerySizeOption = "view_height" | "caption_size";
+
+/** Legacy option names that a resize renames to the current one. */
+const LEGACY_OPTION: Record<GallerySizeOption, string> = {
+  view_height: "height",
+  caption_size: "caption_height",
+};
 
 export function updateGallerySizeOption(source: string, option: GallerySizeOption, value: number): string {
   const lineEnding = source.includes("\r\n") ? "\r\n" : "\n";
@@ -18,12 +24,10 @@ export function updateGallerySizeOption(source: string, option: GallerySizeOptio
     return joinLines(lines, lineEnding, hadFinalLineEnding);
   }
 
-  if (option === "view_height") {
-    const legacyIndex = findOptionLine(lines, "height");
-    if (legacyIndex >= 0) {
-      lines[legacyIndex] = replaceOptionLine(lines[legacyIndex], option, normalizedValue);
-      return joinLines(lines, lineEnding, hadFinalLineEnding);
-    }
+  const legacyIndex = findOptionLine(lines, LEGACY_OPTION[option]);
+  if (legacyIndex >= 0) {
+    lines[legacyIndex] = replaceOptionLine(lines[legacyIndex], option, normalizedValue);
+    return joinLines(lines, lineEnding, hadFinalLineEnding);
   }
 
   lines.splice(findInsertionIndex(lines, option), 0, `${option}: ${normalizedValue}`);
@@ -40,7 +44,7 @@ function replaceOptionLine(line: string, option: GallerySizeOption, value: strin
 }
 
 function findInsertionIndex(lines: string[], option: GallerySizeOption): number {
-  if (option === "caption_height") {
+  if (option === "caption_size") {
     const viewHeightIndex = findOptionLine(lines, "view_height");
     if (viewHeightIndex >= 0) {
       return viewHeightIndex + 1;
